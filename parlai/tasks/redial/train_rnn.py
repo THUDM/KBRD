@@ -20,6 +20,7 @@ if __name__ == '__main__':
         batchsize=64,
         validation_metric='token_acc',
         validation_every_n_secs=300,
+        validation_patience=5,
         tensorboard_log=True,
         tensorboard_tag='task,model,batchsize,hiddensize,embeddingsize,attention,numlayers,rnn_class,learningrate,dropout,gradient_clip',
         tensorboard_metrics="ppl,nll_loss,token_acc,bleu",

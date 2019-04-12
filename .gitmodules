@@ -1,0 +1,3 @@
+[submodule "conversational-recommendations"]
+	path = conversational-recommendations
+	url = https://github.com/THUcqb/conversational-recommendations.git

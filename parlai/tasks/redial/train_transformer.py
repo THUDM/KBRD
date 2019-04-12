@@ -21,6 +21,7 @@ if __name__ == '__main__':
         truncate=1024,
         validation_metric='token_acc',
         validation_every_n_secs=600,
+        validation_patience=5,
         tensorboard_log=True,
         tensorboard_tag="task,model,batchsize,ffn_size,embedding_size,n_layers,learningrate,dropout,gradient_clip",
         tensorboard_metrics="ppl,nll_loss,token_acc,bleu",

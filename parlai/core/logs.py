@@ -85,12 +85,21 @@ class TensorboardLogger(object):
         :return:
         """
         for met in self.tbmetrics:
-            if met in report.keys():
-                self.writer.add_scalar(
-                    "{}/{}".format(setting, met),
-                    report[met],
-                    global_step=step
-                )
+            if '/' in met:
+                subtask, met = met.split('/')
+                if subtask in report['tasks'] and met in report['tasks'][subtask]:
+                    self.writer.add_scalar(
+                        "{}/{}_{}".format(setting, subtask, met),
+                        report['tasks'][subtask][met],
+                        global_step=step
+                    )
+            else:
+                if met in report.keys():
+                    self.writer.add_scalar(
+                        "{}/{}".format(setting, met),
+                        report[met],
+                        global_step=step
+                    )
 
     def add_scalar(self, name, y, step=None):
         """
