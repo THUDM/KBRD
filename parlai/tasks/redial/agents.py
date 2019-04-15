@@ -1,11 +1,16 @@
-from parlai.core.teachers import DialogTeacher
-import parlai.core.agents as core_agents
-from .build import build
-
 import copy
-import os
-import json
+import re
 import csv
+import json
+import os
+import pickle as pkl
+
+import requests
+
+import parlai.core.agents as core_agents
+from parlai.core.teachers import DialogTeacher
+
+from .build import build
 
 
 def _path(opt):
@@ -17,6 +22,30 @@ def _path(opt):
     return (
         os.path.join(opt["datapath"], "redial", f"{dt}_data.jsonl"),
         os.path.join(opt["datapath"], "redial", "movies_with_mentions.csv"),
+        os.path.join(opt["datapath"], "redial", "id2entity.pkl"),
+    )
+
+
+# Set up a local dbpedia-spotlight docker https://github.com/dbpedia-spotlight/spotlight-docker
+DBPEDIA_SPOTLIGHT_ADDR = " http://0.0.0.0:2222/rest/annotate"
+SPOTLIGHT_CONFIDENCE = 0.3
+
+
+def _id2dbpedia(movie_id):
+    pass
+
+
+def _text2entities(text):
+    headers = {"accept": "application/json"}
+    params = {"text": text, "confidence": SPOTLIGHT_CONFIDENCE}
+
+    response = requests.get(
+        DBPEDIA_SPOTLIGHT_ADDR, headers=headers, params=params
+    ).json()
+    return (
+        [f"<{x['@URI']}>" for x in response["Resources"]]
+        if "Resources" in response
+        else []
     )
 
 
@@ -29,15 +58,24 @@ class RedialTeacher(DialogTeacher):
         self.id = "redial"
 
         # store paths to images and labels
-        opt["datafile"], movies_with_mentions_path = _path(opt)
+        opt["datafile"], movies_with_mentions_path, id2entity_path = _path(opt)
 
         with open(movies_with_mentions_path, "r") as f:
             reader = csv.reader(f)
-            self.id2movie = {
-                int(row[0]): row[1:] for row in reader if row[0] != "movieId"
-            }
+            self.id2name, self.id2idx = {}, {}
+            for idx, row in enumerate(reader):
+                if row[0] == "movieId":
+                    continue
+                self.id2name["@" + row[0]] = row[1]
+                self.id2idx["@" + row[0]] = idx - 1
+
+        self.id2entity = pkl.load(open(id2entity_path, "rb"))
 
         super().__init__(opt, shared)
+
+    def _convert_ids_to_indices(self, text):
+        pattern = re.compile("@\d+")
+        return re.sub(pattern, lambda x: "@" + str(self.id2idx[x.group(0)]), text)
 
     def setup_data(self, path):
         self.instances = []
@@ -71,6 +109,9 @@ class RedialTeacher(DialogTeacher):
                 if source_text != "" and target_text != "":
                     # remove the trailing <SEP>
                     source_text, target_text = source_text[:-6], target_text[:-6]
+                    # convert movieId to index [0..n_movies-1]
+                    source_text = self._convert_ids_to_indices(source_text)
+                    target_text = self._convert_ids_to_indices(target_text)
                     yield (source_text, [target_text], None, None, None), new_episode
                     new_episode = False
 
