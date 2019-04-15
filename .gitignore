@@ -133,3 +133,5 @@ heroku-cli-*
 
 # VSCode
 *.vscode
+
+logs.pdf

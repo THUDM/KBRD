@@ -19,6 +19,8 @@ if __name__ == '__main__':
         model_file='saved/transformer',
         batchsize=64,
         truncate=1024,
+        dropout=0.1,
+        relu_dropout=0.1,
         validation_metric='token_acc',
         validation_every_n_secs=600,
         validation_patience=5,
