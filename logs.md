@@ -87,3 +87,7 @@ geometry: "left=1in,right=1in,top=1in,bottom=1in"
     - we don't consider movielens dataset for now?
 
 ## Apr. 15
+
+- baseline in ParlAI
+
+## Apr. 16

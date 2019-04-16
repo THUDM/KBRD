@@ -73,9 +73,20 @@ class RedialTeacher(DialogTeacher):
 
         super().__init__(opt, shared)
 
-    def _convert_ids_to_indices(self, text):
+    def _convert_ids_to_indices(self, text, questions):
+        """@movieID -> @movieIdx#like"""
         pattern = re.compile("@\d+")
-        return re.sub(pattern, lambda x: "@" + str(self.id2idx[x.group(0)]), text)
+
+        def convert(match):
+            movieId = match.group(0)
+            if movieId[1:] in questions and questions[movieId[1:]]["liked"] in [0, 1]:
+                return (
+                    "@" + str(self.id2idx[movieId]) + "#" + str(questions[movieId[1:]]["liked"])
+                )
+            else:
+                return "@" + str(self.id2idx[movieId])
+
+        return re.sub(pattern, convert, text)
 
     def setup_data(self, path):
         self.instances = []
@@ -110,8 +121,12 @@ class RedialTeacher(DialogTeacher):
                     # remove the trailing <SEP>
                     source_text, target_text = source_text[:-6], target_text[:-6]
                     # convert movieId to index [0..n_movies-1]
-                    source_text = self._convert_ids_to_indices(source_text)
-                    target_text = self._convert_ids_to_indices(target_text)
+                    source_text = self._convert_ids_to_indices(
+                        source_text, instance["initiatorQuestions"]
+                    )
+                    target_text = self._convert_ids_to_indices(
+                        target_text, instance["initiatorQuestions"]
+                    )
                     yield (source_text, [target_text], None, None, None), new_episode
                     new_episode = False
 
