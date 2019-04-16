@@ -3,6 +3,8 @@ import re
 
 import numpy as np
 import torch
+from torch import nn
+from torch.nn import functional as F
 
 from parlai.core.torch_agent import Output, TorchAgent
 from parlai.core.utils import round_sigfigs
@@ -65,7 +67,7 @@ class AutorecAgent(TorchAgent):
             # copy initialized data from shared table
             self.model = shared["autorec"]
 
-        self.criterion = ReconstructionLoss()
+        self.criterion = nn.NLLLoss()
         self.optimizer = torch.optim.Adam(
             filter(lambda p: p.requires_grad, self.model.parameters()),
             opt["learningrate"],
@@ -112,53 +114,29 @@ class AutorecAgent(TorchAgent):
     def vectorize(self, obs, history, **kwargs):
         if "text" not in obs:
             return obs
-        # TODO: do sentiment analysis when testing
-        pattern = re.compile(r"@\d+#\d")
+        # TODO: do sentiment analysis when testing or ignore like/dislike
+        pattern = re.compile(r"@\d+")
         input_match = re.findall(pattern, history.get_history_str())
-        # convert '@1234#1' to tuple (idx, rating) = (1234, 1)
-        input_match = [(int(x[1:-2]), int(x[-1])) for x in input_match]
+        input_match = [int(x[1:]) for x in input_match]
 
         if "labels" in obs:
             label_type = "labels"
-            pattern = re.compile(r"@\d+#\d")
-            labels_match = re.findall(pattern, obs[label_type][0])
-            labels_match = [(int(x[1:-2]), int(x[-1])) for x in labels_match]
         elif "eval_labels" in obs:
             label_type = "eval_labels"
-            pattern = re.compile(r"@\d+")
-            labels_match = re.findall(pattern, obs[label_type][0])
-            labels_match = [(int(x[1:]), 1) for x in labels_match]
         else:
             label_type = None
         if label_type is None:
             return obs
+        labels_match = re.findall(pattern, obs[label_type][0])
+        labels_match = [int(x[1:]) for x in labels_match]
         if labels_match == []:
             del obs['text'], obs[label_type]
             return obs
 
         input_vec = torch.zeros(self.n_movies)
-        labels_vec = torch.zeros(self.n_movies) - 1
-        if label_type == "labels":
-            match_list = input_match + labels_match
-            for movieIdx, rating in match_list:
-                labels_vec[movieIdx] = rating
-            # add noise in training
-            if len(match_list) > 1:
-                n_samples = np.random.randint(1, len(match_list))
-                input_keys = np.random.choice(
-                    range(len(match_list)), n_samples, replace=False
-                )
-                for idx in input_keys:
-                    movieIdx, rating = match_list[idx]
-                    input_vec[movieIdx] = rating
-            # standard training
-            # for movieIdx, rating in match_list:
-            #     input_vec[movieIdx] = rating
-        else:
-            for movieIdx, rating in input_match:
-                input_vec[movieIdx] = rating
-            for movieIdx, rating in labels_match:
-                labels_vec[movieIdx] = rating
+        labels_vec = torch.zeros(self.n_movies, dtype=torch.long)
+        input_vec[input_match] = 1
+        labels_vec[labels_match] = 1
 
         obs["text_vec"] = input_vec
         obs[label_type + "_vec"] = labels_vec
@@ -166,10 +144,20 @@ class AutorecAgent(TorchAgent):
         return obs
 
     def train_step(self, batch):
-        outputs = self.model(batch.text_vec)
-        loss = self.criterion(outputs, batch.label_vec)
+        bs = (batch.label_vec == 1).sum().item()
+        xs = torch.zeros(bs, self.n_movies)
+        ys = torch.zeros(bs, dtype=torch.long)
+        if self.use_cuda:
+            xs = xs.cuda()
+            ys = ys.cuda()
+        for i, (b, movieIdx) in enumerate(batch.label_vec.nonzero().tolist()):
+            xs[i] = batch.text_vec[b]
+            ys[i] = movieIdx
+        outputs = F.log_softmax(self.model(xs, range01=False), dim=1)
+        loss = self.criterion(outputs, ys)
+
         self.metrics["loss"] += loss.item()
-        self.metrics["num_tokens"] += (batch.label_vec != -1).long().sum().item()
+        self.metrics["num_tokens"] += bs
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -177,36 +165,32 @@ class AutorecAgent(TorchAgent):
 
         self._number_training_updates += 1
 
-        _, pred_idx = torch.topk(outputs, k=100, dim=1)
-        for b in range(batch.label_vec.shape[0]):
-            for movie_idx in (batch.label_vec[b] - (-1)).nonzero().view(-1).tolist():
-                self.metrics["recall@1"].append(
-                    int(movie_idx in pred_idx[b][:1].tolist())
-                )
-                self.metrics["recall@10"].append(
-                    int(movie_idx in pred_idx[b][:10].tolist())
-                )
-                self.metrics["recall@50"].append(
-                    int(movie_idx in pred_idx[b][:50].tolist())
-                )
-
     def eval_step(self, batch):
         if batch.text_vec is None:
             return
-        outputs = self.model(batch.text_vec)
-        loss = self.criterion(outputs, batch.label_vec)
+        bs = (batch.label_vec == 1).sum().item()
+        xs = torch.zeros(bs, self.n_movies)
+        ys = torch.zeros(bs, dtype=torch.long)
+        if self.use_cuda:
+            xs = xs.cuda()
+            ys = ys.cuda()
+        for i, (b, movieIdx) in enumerate(batch.label_vec.nonzero().tolist()):
+            xs[i] = batch.text_vec[b]
+            ys[i] = movieIdx
+        outputs = F.log_softmax(self.model(xs, range01=False), dim=1)
+        loss = self.criterion(outputs, ys)
+
         self.metrics["loss"] += loss.item()
-        self.metrics["num_tokens"] += (batch.label_vec != -1).sum().item()
+        self.metrics["num_tokens"] += bs
         _, pred_idx = torch.topk(outputs, k=100, dim=1)
 
-        for b in range(batch.label_vec.shape[0]):
-            for movie_idx in (batch.label_vec[b] - (-1)).nonzero().view(-1).tolist():
-                self.metrics["recall@1"].append(
-                    int(movie_idx in pred_idx[b][:1].tolist())
-                )
-                self.metrics["recall@10"].append(
-                    int(movie_idx in pred_idx[b][:10].tolist())
-                )
-                self.metrics["recall@50"].append(
-                    int(movie_idx in pred_idx[b][:50].tolist())
-                )
+        for b in range(bs):
+            self.metrics["recall@1"].append(
+                int(ys[b].item() in pred_idx[b][:1].tolist())
+            )
+            self.metrics["recall@10"].append(
+                int(ys[b].item() in pred_idx[b][:10].tolist())
+            )
+            self.metrics["recall@50"].append(
+                int(ys[b].item() in pred_idx[b][:50].tolist())
+            )

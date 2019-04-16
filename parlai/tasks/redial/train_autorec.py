@@ -20,7 +20,7 @@ if __name__ == '__main__':
         batchsize=64,
         n_movies=6924,
         validation_metric='loss',
-        validation_every_n_secs=10,
+        validation_every_n_secs=5,
         validation_patience=5,
         tensorboard_log=True,
         tensorboard_tag='task,model,batchsize,hiddensize,learningrate',
