@@ -105,21 +105,19 @@ class RedialTeacher(DialogTeacher):
             while message_idx < len(messages):
                 source_text = ""
                 target_text = ""
-                while (
+                if (
                     message_idx < len(messages)
                     and messages[message_idx]["senderWorkerId"] == initiator_id
                 ):
-                    source_text += messages[message_idx]["text"] + " <SEP> "
+                    source_text = messages[message_idx]["text"]
                     message_idx += 1
-                while (
+                if (
                     message_idx < len(messages)
                     and messages[message_idx]["senderWorkerId"] == respondent_id
                 ):
-                    target_text += messages[message_idx]["text"] + " <SEP> "
+                    target_text = messages[message_idx]["text"]
                     message_idx += 1
-                if source_text != "" and target_text != "":
-                    # remove the trailing <SEP>
-                    source_text, target_text = source_text[:-6], target_text[:-6]
+                if source_text != "" or target_text != "":
                     # convert movieId to index [0..n_movies-1]
                     source_text = self._convert_ids_to_indices(
                         source_text, instance["initiatorQuestions"]

@@ -26,6 +26,7 @@ geometry: "left=1in,right=1in,top=1in,bottom=1in"
     - [ ] GraphSAGE, use ComplEx embedding on dbpedia as initialization
     - ~~Autorec, NCF, CDL, DeppCoNN, CKE~~
     - ~~To combine content-based CF with user-based recommender.~~ (the nips authors tried but failed)
+#. Overall quantitative evaluation
 
 # Logs
 
@@ -79,8 +80,14 @@ geometry: "left=1in,right=1in,top=1in,bottom=1in"
 
 - Recommendation metric for nips baseline
     - hit@10, ....
-    - baseline results with movielens pretraining & use reply @ best valid point: recall@1 = 0.03138, recall@10 = 0.15231, recall@50 = 0.32957
-    - baseline results without pretraining & use reply @ best valid point: recall@1 = 0.0149505051535871, recall@10 = 0.10296969078477396, recall@50 = 0.22435962853352384
+    <!-- - baseline results with movielens pretraining & use reply @ best valid point: recall@1 = 0.03138, recall@10 = 0.15231, recall@50 = 0.32957 -->
+    - baseline results with movielens pretraining & use reply @ best valid loss: recall@1 = 0.014709644410335124, recall@10 = 0.08633921719109747, recall@50 = 0.2209004860578153
+    - baseline results with movielens pretraining & use reply @ best recall: recall@1 = 0.023919160910718853, recall@10 = 0.12368892299820926, recall@50 = 0.30084420567920184
+    <!-- - baseline results without pretraining & use reply @ best valid point: recall@1 = 0.0149505051535871, recall@10 = 0.10296969078477396, recall@50 = 0.22435962853352384 -->
+    - baseline results without pretraining & use reply @ best valid point: recall@1 = 0.009849066257354822, recall@10 = 0.05973394730110002, recall@50 = 0.1655154771041187
+    - baseline results without pretraining & use reply @ best recall: recall@1 = 0.010360706062931695, recall@10 = 0.07828089025326171, recall@50 = 0.20900486057815298
+    - baseline test results without pretraining & use reply @ best recall: recall@1 = 0.006408972561586221, recall@10 = 0.05547766873623072, recall@50 = 0.17304225916282795
+
 - Match redial movies to dbpedia
     - 6272 of 6924 movies are matched!!
 - [ ] match movieslens to dbpedia
@@ -91,3 +98,24 @@ geometry: "left=1in,right=1in,top=1in,bottom=1in"
 - baseline in ParlAI
 
 ## Apr. 16
+
+- Differences from kg enhanced recommenders
+    - conversation, cold start
+    - RippleNet represents the user with historical clicks. We utilize user utterance
+    - MKR only links items to kg entities
+    <!-- - our recommended item corresponds to an entity in the knowledge graph (In MKR, items are associated with entities.) -->
+
+## Apr. 17
+
+- NeurIPS reviews for the dataset paper <http://media.nips.cc/nipsbooks/nipspapers/paper_files/nips31/reviews/6383.html>
+
+## Apr. 18
+
+- Some thoughts on why we need conversational recommendation (a more ambitious view, rather than a branch of task-oriented dialog)
+    - User feedback is limited to GUI-based activities
+    - Sometimes users need to do explicit negative feedback / repetitive implicit negative feedback
+    - By asking them questions in natural language, conversational recommendation utilizes an information channel different from all other user feedbacks (e.g. clicks, stay) in real-time recommendation.
+    - A more human-like, trustworthy recommender for the user.
+    - explanation -> interactive
+- If we ask efficient questions, users can simply respond with yes / no?
+    - VQA, GuessWhat
