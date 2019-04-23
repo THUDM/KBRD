@@ -23,30 +23,17 @@ def _path(opt):
         os.path.join(opt["datapath"], "redial", f"{dt}_data.jsonl"),
         os.path.join(opt["datapath"], "redial", "movies_with_mentions.csv"),
         os.path.join(opt["datapath"], "redial", "id2entity.pkl"),
+        os.path.join(opt["datapath"], "redial", "entity_dict.pkl"),
+        os.path.join(opt["datapath"], "redial", "text_dict.pkl"),
     )
-
-
-# Set up a local dbpedia-spotlight docker https://github.com/dbpedia-spotlight/spotlight-docker
-DBPEDIA_SPOTLIGHT_ADDR = " http://0.0.0.0:2222/rest/annotate"
-SPOTLIGHT_CONFIDENCE = 0.3
 
 
 def _id2dbpedia(movie_id):
     pass
 
 
-def _text2entities(text):
-    headers = {"accept": "application/json"}
-    params = {"text": text, "confidence": SPOTLIGHT_CONFIDENCE}
-
-    response = requests.get(
-        DBPEDIA_SPOTLIGHT_ADDR, headers=headers, params=params
-    ).json()
-    return (
-        [f"<{x['@URI']}>" for x in response["Resources"]]
-        if "Resources" in response
-        else []
-    )
+def _text2entities(text, text_dict):
+    return text_dict[text]
 
 
 class RedialTeacher(DialogTeacher):
@@ -58,7 +45,11 @@ class RedialTeacher(DialogTeacher):
         self.id = "redial"
 
         # store paths to images and labels
-        opt["datafile"], movies_with_mentions_path, id2entity_path = _path(opt)
+        opt[
+            "datafile"
+        ], movies_with_mentions_path, id2entity_path, entity_dict_path, text_dict_path = _path(
+            opt
+        )
 
         with open(movies_with_mentions_path, "r") as f:
             reader = csv.reader(f)
@@ -70,23 +61,28 @@ class RedialTeacher(DialogTeacher):
                 self.id2idx["@" + row[0]] = idx - 1
 
         self.id2entity = pkl.load(open(id2entity_path, "rb"))
+        entity_dict = pkl.load(open(entity_dict_path, "rb"))
+        self.text_dict = pkl.load(open(text_dict_path, "rb"))
+        self.entity2entityid = dict([(k, i) for i, k in enumerate(entity_dict)])
 
         super().__init__(opt, shared)
 
     def _convert_ids_to_indices(self, text, questions):
-        """@movieID -> @movieIdx#like"""
+        """@movieID -> @movieIdx"""
         pattern = re.compile("@\d+")
 
         def convert(match):
             movieId = match.group(0)
-            if movieId[1:] in questions and questions[movieId[1:]]["liked"] in [0, 1]:
-                return (
-                    "@" + str(self.id2idx[movieId]) + "#" + str(questions[movieId[1:]]["liked"])
-                )
-            else:
-                return "@" + str(self.id2idx[movieId])
+            return "@" + str(self.id2idx[movieId])
 
         return re.sub(pattern, convert, text)
+
+    def _append_entities(self, text):
+        """text -> text #entity1 #entity2"""
+        entities = _text2entities(text, self.text_dict)
+        for entity in entities:
+            text += f" #{len(self.id2idx) + self.entity2entityid[entity]}"
+        return text
 
     def setup_data(self, path):
         self.instances = []
@@ -119,6 +115,10 @@ class RedialTeacher(DialogTeacher):
                     message_idx += 1
                 if source_text != "" or target_text != "":
                     # convert movieId to index [0..n_movies-1]
+                    if source_text != "":
+                        source_text = self._append_entities(source_text)
+                    if target_text != "":
+                        target_text = self._append_entities(target_text)
                     source_text = self._convert_ids_to_indices(
                         source_text, instance["initiatorQuestions"]
                     )

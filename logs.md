@@ -95,7 +95,7 @@ geometry: "left=1in,right=1in,top=1in,bottom=1in"
 
 ## Apr. 15
 
-- baseline in ParlAI
+- recommendation training loop in ParlAI
 
 ## Apr. 16
 
@@ -108,6 +108,7 @@ geometry: "left=1in,right=1in,top=1in,bottom=1in"
 ## Apr. 17
 
 - NeurIPS reviews for the dataset paper <http://media.nips.cc/nipsbooks/nipspapers/paper_files/nips31/reviews/6383.html>
+- Coding
 
 ## Apr. 18
 
@@ -116,6 +117,20 @@ geometry: "left=1in,right=1in,top=1in,bottom=1in"
     - Sometimes users need to do explicit negative feedback / repetitive implicit negative feedback
     - By asking them questions in natural language, conversational recommendation utilizes an information channel different from all other user feedbacks (e.g. clicks, stay) in real-time recommendation.
     - A more human-like, trustworthy recommender for the user.
-    - explanation -> interactive
-- If we ask efficient questions, users can simply respond with yes / no?
+    - static explanation -> interactive
+- Future topic: If we ask efficient questions, users can simply respond with yes / no?
     - VQA, GuessWhat
+- Discussion with Chang Zhou
+    - our model's novelty (combining kg aware rec, kg-aware dialog)
+    - define the problem more formally; provide insights, analysis
+    - overall evaluation metrics
+    - future topic: rl, user simulation
+
+## Apr. 19
+
+- Ripplenet baseline
+
+## Apr. 23
+
+- Autorec: test:{'exs': 16865, 'num_updates': 882, 'num_tokens': 5001, 'loss': 0.4436, 'recall@1': 0.009398, 'recall@10': 0.04939, 'recall@50': 0.1464}
+- Autorec + Tag: test:{'exs': 16865, 'num_updates': 1333, 'num_tokens': 5001, 'loss': 0.4458, 'recall@1': 0.0128, 'recall@10': 0.05879, 'recall@50': 0.1614}
