@@ -1,4 +1,6 @@
 import copy
+import os
+import pickle as pkl
 import re
 
 import numpy as np
@@ -63,9 +65,14 @@ class AutorecAgent(TorchAgent):
             if self.use_cuda:
                 self.model.cuda()
 
+            self.movie_ids = pkl.load(
+                open(os.path.join(opt["datapath"], "redial", "movie_ids.pkl"), "rb")
+            )
+
         elif "autorec" in shared:
             # copy initialized data from shared table
             self.model = shared["autorec"]
+            self.movie_ids = shared["movie_ids"]
 
         self.criterion = nn.NLLLoss()
         self.optimizer = torch.optim.Adam(
@@ -109,6 +116,7 @@ class AutorecAgent(TorchAgent):
         """Share internal states."""
         shared = super().share()
         shared["autorec"] = self.model
+        shared["movie_ids"] = self.movie_ids
         return shared
 
     def vectorize(self, obs, history, **kwargs):
@@ -129,7 +137,7 @@ class AutorecAgent(TorchAgent):
             return obs
         labels_match = re.findall(pattern, obs[label_type][0])
         labels_match = [int(x[1:]) for x in labels_match]
-        if labels_match == []:
+        if input_match == [] or labels_match == []:
             del obs['text'], obs[label_type]
             return obs
 
@@ -182,6 +190,8 @@ class AutorecAgent(TorchAgent):
 
         self.metrics["loss"] += loss.item()
         self.metrics["num_tokens"] += bs
+        masked_outputs = torch.zeros_like(outputs) - np.inf
+        masked_outputs[:, self.movie_ids] = outputs[:, self.movie_ids]
         _, pred_idx = torch.topk(outputs, k=100, dim=1)
 
         for b in range(bs):

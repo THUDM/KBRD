@@ -64,6 +64,7 @@ def _entity2movie(entity, abstract=""):
 
 
 DBPEDIA_ABSTRACT_PATH = "dbpedia/short_abstracts_en.ttl"
+DBPEDIA_PATH = "dbpedia/mappingbased_objects_en.ttl"
 
 
 def _build_dbpedia(dbpedia_path):
@@ -81,6 +82,49 @@ def _build_dbpedia(dbpedia_path):
                 movie2years[movie].add(year)
                 movie2entity[(movie, year)] = entity
     return {"movie2years": movie2years, "movie2entity": movie2entity}
+
+
+def _load_kg(path):
+    kg = defaultdict(list)
+    with open(path) as f:
+        for line in f.readlines():
+            tuples = line.split()
+            if tuples and len(tuples) == 4 and tuples[-1] == ".":
+                h, r, t = tuples[:3]
+                # TODO: include property/publisher and subject/year, etc
+                if "ontology" in r:
+                    kg[h].append((r, t))
+    return kg
+
+
+def _extract_subkg(kg, seed_set, n_hop):
+    subkg = defaultdict(list)
+    subkg_hrt = set()
+
+    ripple_set = []
+    for h in range(n_hop):
+        memories_h = []
+        memories_r = []
+        memories_t = []
+
+        if h == 0:
+            tails_of_last_hop = seed_set
+        else:
+            tails_of_last_hop = ripple_set[-1][2]
+
+        for entity in tails_of_last_hop:
+            for tail_and_relation in kg[entity]:
+                h, r, t = entity, tail_and_relation[0], tail_and_relation[1]
+                if (h, r, t) not in subkg_hrt:
+                    subkg[h].append((r, t))
+                    subkg_hrt.add((h, r, t))
+                memories_h.append(h)
+                memories_r.append(r)
+                memories_t.append(t)
+
+        ripple_set.append((memories_h, memories_r, memories_t))
+
+    return subkg
 
 
 def build(opt):
@@ -113,6 +157,7 @@ def build(opt):
         movie2entity = dbpedia["movie2entity"]
         movie2years = dbpedia["movie2years"]
 
+        # Match REDIAL movies to dbpedia entities
         movies_with_mentions_path = os.path.join(dpath, "movies_with_mentions.csv")
         with open(movies_with_mentions_path, "r") as f:
             reader = csv.reader(f)
@@ -140,8 +185,35 @@ def build(opt):
                     movie2entity[(name, year)] if (name, year) in movie2entity else None
                 )
 
+        # Extract sub-kg related to movies
+        kg = _load_kg(DBPEDIA_PATH)
+        subkg = _extract_subkg(
+            kg,
+            [
+                id2entity[k]
+                for k in id2entity
+                if id2entity[k] is not None and kg[id2entity[k]] != []
+            ],
+            2,
+        )
+        entities = set([k for k in subkg]) | set(
+            [x[1] for k in subkg for x in subkg[k]]
+        )
+        entity2entityId = dict([(k, i) for i, k in enumerate(entities)])
+        relations = set([x[0] for k in subkg for x in subkg[k]])
+        relation2relationId = dict([(k, i) for i, k in enumerate(relations)])
+        subkg_idx = defaultdict(list)
+        for h in subkg:
+            for r, t in subkg[h]:
+                subkg_idx[entity2entityId[h]].append((relation2relationId[r], entity2entityId[t]))
+        movie_ids = [entity2entityId[id2entity[k]] for k in id2entity if id2entity[k] in entity2entityId]
+
         pkl.dump(id2entity, open(os.path.join(dpath, "id2entity.pkl"), "wb"))
         pkl.dump(dbpedia, open(os.path.join(dpath, "dbpedia.pkl"), "wb"))
+        pkl.dump(subkg_idx, open("data/redial/subkg.pkl", "wb"))
+        pkl.dump(entity2entityId, open("data/redial/entity2entityId.pkl", "wb"))
+        pkl.dump(relation2relationId, open("data/redial/relation2relationId.pkl", "wb"))
+        pkl.dump(movie_ids, open("data/redial/movie_ids.pkl", "wb"))
 
         # mark the data as built
         build_data.mark_done(dpath, version_string=version)

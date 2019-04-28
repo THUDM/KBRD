@@ -1,5 +1,6 @@
 import json
 import re
+import pickle as pkl
 from collections import defaultdict
 
 import requests
@@ -7,7 +8,7 @@ from tqdm import tqdm
 
 # Set up a local dbpedia-spotlight docker https://github.com/dbpedia-spotlight/spotlight-docker
 DBPEDIA_SPOTLIGHT_ADDR = " http://0.0.0.0:2222/rest/annotate"
-SPOTLIGHT_CONFIDENCE = 0.5
+SPOTLIGHT_CONFIDENCE = 0.1
 
 
 def _id2dbpedia(movie_id):
@@ -56,3 +57,6 @@ for split in ['train', 'valid', 'test']:
     _tags(split, tags_dict, text_dict)
 
 print(len(tags_dict))
+
+pkl.dump(text_dict, open('data/redial/text_dict_confidence_0.1.pkl', 'wb'))
+pkl.dump(tags_dict, open('data/redial/entity_dict_confidence_0.1.pkl', 'wb'))

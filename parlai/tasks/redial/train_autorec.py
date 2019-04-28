@@ -18,7 +18,7 @@ if __name__ == '__main__':
         model='autorec',
         model_file='saved/autorec',
         batchsize=64,
-        n_movies=6924,
+        n_movies=62745,
         validation_metric='recall@50',
         validation_every_n_secs=5,
         validation_patience=5,

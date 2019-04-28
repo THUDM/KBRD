@@ -25,6 +25,8 @@ def _path(opt):
         os.path.join(opt["datapath"], "redial", "id2entity.pkl"),
         os.path.join(opt["datapath"], "redial", "entity_dict.pkl"),
         os.path.join(opt["datapath"], "redial", "text_dict.pkl"),
+        os.path.join(opt["datapath"], "redial", "entity2entityId.pkl"),
+        os.path.join(opt["datapath"], "redial", "relation2relationId.pkl"),
     )
 
 
@@ -47,23 +49,25 @@ class RedialTeacher(DialogTeacher):
         # store paths to images and labels
         opt[
             "datafile"
-        ], movies_with_mentions_path, id2entity_path, entity_dict_path, text_dict_path = _path(
+        ], movies_with_mentions_path, id2entity_path, entity_dict_path, text_dict_path, entity2entityId_path, relation2relationId_path = _path(
             opt
         )
 
-        with open(movies_with_mentions_path, "r") as f:
-            reader = csv.reader(f)
-            self.id2name, self.id2idx = {}, {}
-            for idx, row in enumerate(reader):
-                if row[0] == "movieId":
-                    continue
-                self.id2name["@" + row[0]] = row[1]
-                self.id2idx["@" + row[0]] = idx - 1
+        # with open(movies_with_mentions_path, "r") as f:
+        #     reader = csv.reader(f)
+        #     self.id2name, self.id2idx = {}, {}
+        #     for idx, row in enumerate(reader):
+        #         if row[0] == "movieId":
+        #             continue
+        #         self.id2name["@" + row[0]] = row[1]
+        #         self.id2idx["@" + row[0]] = idx - 1
 
+        self.entity2entityId = pkl.load(open(entity2entityId_path, "rb"))
+        self.relation2relationId = pkl.load(open(relation2relationId_path, "rb"))
         self.id2entity = pkl.load(open(id2entity_path, "rb"))
-        entity_dict = pkl.load(open(entity_dict_path, "rb"))
-        self.text_dict = pkl.load(open(text_dict_path, "rb"))
-        self.entity2entityid = dict([(k, i) for i, k in enumerate(entity_dict)])
+        # entity_dict = pkl.load(open(entity_dict_path, "rb"))
+        # self.text_dict = pkl.load(open(text_dict_path, "rb"))
+        # self.entity2entityid = dict([(k, i) for i, k in enumerate(entity_dict)])
 
         super().__init__(opt, shared)
 
@@ -73,7 +77,10 @@ class RedialTeacher(DialogTeacher):
 
         def convert(match):
             movieId = match.group(0)
-            return "@" + str(self.id2idx[movieId])
+            try:
+                return "@" + str(self.entity2entityId[self.id2entity[int(movieId[1:])]])
+            except Exception:
+                return ""
 
         return re.sub(pattern, convert, text)
 
@@ -115,10 +122,10 @@ class RedialTeacher(DialogTeacher):
                     message_idx += 1
                 if source_text != "" or target_text != "":
                     # convert movieId to index [0..n_movies-1]
-                    if source_text != "":
-                        source_text = self._append_entities(source_text)
-                    if target_text != "":
-                        target_text = self._append_entities(target_text)
+                    # if source_text != "":
+                    #     source_text = self._append_entities(source_text)
+                    # if target_text != "":
+                    #     target_text = self._append_entities(target_text)
                     source_text = self._convert_ids_to_indices(
                         source_text, instance["initiatorQuestions"]
                     )
