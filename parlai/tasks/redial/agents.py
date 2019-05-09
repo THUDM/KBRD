@@ -62,14 +62,29 @@ class RedialTeacher(DialogTeacher):
         #         self.id2name["@" + row[0]] = row[1]
         #         self.id2idx["@" + row[0]] = idx - 1
 
-        self.entity2entityId = pkl.load(open(entity2entityId_path, "rb"))
-        self.relation2relationId = pkl.load(open(relation2relationId_path, "rb"))
-        self.id2entity = pkl.load(open(id2entity_path, "rb"))
-        # entity_dict = pkl.load(open(entity_dict_path, "rb"))
-        # self.text_dict = pkl.load(open(text_dict_path, "rb"))
-        # self.entity2entityid = dict([(k, i) for i, k in enumerate(entity_dict)])
+        if not shared:
+            self.entity2entityId = pkl.load(open(entity2entityId_path, "rb"))
+            self.relation2relationId = pkl.load(open(relation2relationId_path, "rb"))
+            self.id2entity = pkl.load(open(id2entity_path, "rb"))
+            # entity_dict = pkl.load(open(entity_dict_path, "rb"))
+            self.text_dict = pkl.load(open(text_dict_path, "rb"))
+            # self.entity2entityid = dict([(k, i) for i, k in enumerate(entity_dict)])
+        else:
+            self.entity2entityId = shared["entity2entityId"]
+            self.relation2relationId = shared["relation2relationId"]
+            self.id2entity = shared["id2entity"]
+            self.text_dict = shared["text_dict"]
 
         super().__init__(opt, shared)
+
+    def share(self):
+        """Share internal states."""
+        shared = super().share()
+        shared["entity2entityId"] = self.entity2entityId
+        shared["relation2relationId"] = self.relation2relationId
+        shared["id2entity"] = self.id2entity
+        shared["text_dict"] = self.text_dict
+        return shared
 
     def _convert_ids_to_indices(self, text, questions):
         """@movieID -> @movieIdx"""
@@ -88,7 +103,8 @@ class RedialTeacher(DialogTeacher):
         """text -> text #entity1 #entity2"""
         entities = _text2entities(text, self.text_dict)
         for entity in entities:
-            text += f" #{len(self.id2idx) + self.entity2entityid[entity]}"
+            if entity in self.entity2entityId:
+                text += f" #{self.entity2entityId[entity]}"
         return text
 
     def setup_data(self, path):

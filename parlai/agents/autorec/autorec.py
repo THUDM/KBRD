@@ -190,17 +190,17 @@ class AutorecAgent(TorchAgent):
 
         self.metrics["loss"] += loss.item()
         self.metrics["num_tokens"] += bs
-        masked_outputs = torch.zeros_like(outputs) - np.inf
-        masked_outputs[:, self.movie_ids] = outputs[:, self.movie_ids]
+        # masked_outputs = torch.zeros_like(outputs) - np.inf
+        # masked_outputs[:, self.movie_ids] = outputs[:, self.movie_ids]
+        outputs = outputs[:, torch.LongTensor(self.movie_ids)]
         _, pred_idx = torch.topk(outputs, k=100, dim=1)
 
         for b in range(bs):
-            self.metrics["recall@1"].append(
-                int(ys[b].item() in pred_idx[b][:1].tolist())
-            )
+            target_idx = self.movie_ids.index(ys[b].item())
+            self.metrics["recall@1"].append(int(target_idx in pred_idx[b][:1].tolist()))
             self.metrics["recall@10"].append(
-                int(ys[b].item() in pred_idx[b][:10].tolist())
+                int(target_idx in pred_idx[b][:10].tolist())
             )
             self.metrics["recall@50"].append(
-                int(ys[b].item() in pred_idx[b][:50].tolist())
+                int(target_idx in pred_idx[b][:50].tolist())
             )

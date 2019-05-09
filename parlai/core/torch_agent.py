@@ -1363,10 +1363,10 @@ class TorchAgent(Agent):
             )
         else:
             states['number_training_updates'] = self._number_training_updates
-            if hasattr(self, 'scheduler'):
+            if getattr(self, 'scheduler', None):
                 states['lr_scheduler'] = self.scheduler.state_dict()
                 states['lr_scheduler_type'] = self.opt['lr_scheduler']
-            if hasattr(self, 'warmup_scheduler'):
+            if getattr(self, 'warmup_scheduler', None):
                 states['warmup_scheduler'] = self.warmup_scheduler.state_dict()
 
         return states

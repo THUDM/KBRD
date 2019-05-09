@@ -33,7 +33,9 @@ class RippleNet(nn.Module):
         self.entity_emb = nn.Embedding(self.n_entity, self.dim)
         self.relation_emb = nn.Embedding(self.n_relation, self.dim * self.dim)
         self.transform_matrix = nn.Linear(self.dim, self.dim, bias=False)
-        self.criterion = nn.BCELoss()
+        self.criterion = nn.CrossEntropyLoss()
+        self.transform_matrix = nn.Linear(self.dim, self.dim, bias=False)
+        self.output = nn.Linear(self.dim, self.n_entity)
 
     def forward(
         self,
@@ -44,7 +46,12 @@ class RippleNet(nn.Module):
         memories_t: list,
     ):
         # [batch size, dim]
-        item_embeddings = self.entity_emb(items)
+        # item_embeddings = self.entity_emb(items)
+        u_emb = self.entity_emb(memories_h[0])
+        u_emb = u_emb.mean(dim=1)
+        # item_embeddings = u_emb
+        u_emb = torch.sigmoid(u_emb)
+        scores = self.output(u_emb)
         h_emb_list = []
         r_emb_list = []
         t_emb_list = []
@@ -60,20 +67,20 @@ class RippleNet(nn.Module):
             # [batch size, n_memory, dim]
             t_emb_list.append(self.entity_emb(memories_t[i]))
 
-        o_list, item_embeddings = self._key_addressing(
-            h_emb_list, r_emb_list, t_emb_list, item_embeddings
-        )
-        scores = self.predict(item_embeddings, o_list)
+        # o_list, item_embeddings = self._key_addressing(
+        #     h_emb_list, r_emb_list, t_emb_list, item_embeddings
+        # )
+        # scores = self.predict(item_embeddings, [u_emb] + o_list)
 
         return_dict = self._compute_loss(
-            scores, labels, h_emb_list, t_emb_list, r_emb_list
+            scores, items, h_emb_list, t_emb_list, r_emb_list
         )
-        return_dict["scores"] = scores
+        return_dict["scores"] = scores.detach()
 
         return return_dict
 
-    def _compute_loss(self, scores, labels, h_emb_list, t_emb_list, r_emb_list):
-        base_loss = self.criterion(scores, labels.float())
+    def _compute_loss(self, scores, items, h_emb_list, t_emb_list, r_emb_list):
+        base_loss = self.criterion(scores, items)
 
         kge_loss = 0
         for hop in range(self.n_hop):
@@ -105,13 +112,13 @@ class RippleNet(nn.Module):
             h_expanded = torch.unsqueeze(h_emb_list[hop], dim=3)
 
             # [batch_size, n_memory, dim]
-            Rh = torch.squeeze(torch.matmul(r_emb_list[hop], h_expanded))
+            Rh = torch.squeeze(torch.matmul(r_emb_list[hop], h_expanded), dim=3)
 
             # [batch_size, dim, 1]
             v = torch.unsqueeze(item_embeddings, dim=2)
 
             # [batch_size, n_memory]
-            probs = torch.squeeze(torch.matmul(Rh, v))
+            probs = torch.squeeze(torch.matmul(Rh, v), dim=2)
 
             # [batch_size, n_memory]
             probs_normalized = F.softmax(probs, dim=1)
@@ -135,6 +142,8 @@ class RippleNet(nn.Module):
             item_embeddings = self.transform_matrix(o)
         elif self.item_update_mode == "plus_transform":
             item_embeddings = self.transform_matrix(item_embeddings + o)
+        elif self.item_update_mode == "identity":
+            pass
         else:
             raise Exception("Unknown item updating mode: " + self.item_update_mode)
         return item_embeddings
@@ -142,16 +151,18 @@ class RippleNet(nn.Module):
     def predict(self, item_embeddings, o_list):
         y = o_list[-1]
         if self.using_all_hops:
-            for i in range(self.n_hop - 1):
-                y += o_list[i]
+            for o in o_list[:-1]:
+                y += o
 
         # [batch_size]
-        scores = (item_embeddings * y).sum(dim=1)
-        return torch.sigmoid(scores)
+        scores = self.output(y)
+        # scores = (item_embeddings * y).sum(dim=1)
+        return scores
+        # return torch.sigmoid(scores)
 
     def evaluate(self, items, labels, memories_h, memories_r, memories_t):
         return_dict = self.forward(items, labels, memories_h, memories_r, memories_t)
-        scores = return_dict["scores"].detach().cpu().numpy()
+        scores = return_dict["scores"].cpu().numpy()
         labels = labels.cpu().numpy()
         auc = roc_auc_score(y_true=labels, y_score=scores)
         predictions = [1 if i >= 0.5 else 0 for i in scores]

@@ -576,9 +576,9 @@ class TrainLoop():
         t_report = run_eval(test_world, opt, 'test', max_exs, write_log=True)
         from orion.client import report_results
         report_results([dict(
-            name='-auc',
+            name='-recall@50',
             type='objective',
-            value=-t_report['auc']
+            value=-t_report['recall@50']
         )])
 
         if valid_world:

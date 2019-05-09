@@ -16,18 +16,18 @@ if __name__ == "__main__":
         task="redial",
         dict_tokenizer="split",
         model="ripplenet",
-       # dict_file="saved/tmp",
+        dict_file="saved/tmp",
         model_file="saved/ripplenet",
         fp16=True,
         batchsize=256,
         n_entity=62745,
         n_relation=204,
-        validation_metric="loss",
+        validation_metric="recall@50",
         validation_every_n_secs=30,
         validation_patience=5,
         tensorboard_log=True,
         tensorboard_tag="task,model,batchsize,dim,learningrate,model_file",
-        tensorboard_metrics="loss,base_loss,kge_loss,l2_loss,acc,auc",
+        tensorboard_metrics="loss,base_loss,kge_loss,l2_loss,acc,auc,recall@1,recall@10,recall@50",
     )
     opt = parser.parse_args()
     TrainLoop(opt).train()

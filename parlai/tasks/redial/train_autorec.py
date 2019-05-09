@@ -21,10 +21,10 @@ if __name__ == '__main__':
         n_movies=62745,
         validation_metric='recall@50',
         validation_every_n_secs=5,
-        validation_patience=5,
+        validation_patience=30,
         tensorboard_log=True,
-        tensorboard_tag='task,model,batchsize,hiddensize,learningrate',
-        tensorboard_metrics="loss",
+        tensorboard_tag='task,model,batchsize,hiddensize,learningrate,model_file',
+        tensorboard_metrics="loss,recall@1,recall@10,recall@50",
     )
     opt = parser.parse_args()
     TrainLoop(opt).train()
