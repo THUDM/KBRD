@@ -230,19 +230,11 @@ class TransformerRecGeneratorAgent(TorchGeneratorAgent):
         kwargs['add_end'] = False
         obs = super().vectorize(obs, history, **kwargs)
 
-        # match movies
-        pattern = re.compile(r"@\d+")
-        try:
-            input_match = re.findall(pattern, history.get_history_str())
-        except TypeError:
-            input_match = []
-        input_match = [int(x[1:]) for x in input_match]
-        input_match = [x for x in input_match if x in self.kg]
+        # match movies and entities
+        input_match = list(map(int, obs['label_candidates'][1].split()))
+        entities_match = list(map(int, obs['label_candidates'][3].split()))
 
-        # input_vec = torch.zeros(self.n_entity)
-        # input_vec[input_match] = 1
-
-        obs["movies"] = input_match
+        obs["movies"] = input_match + entities_match
 
         return obs
 
