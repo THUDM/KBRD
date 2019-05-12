@@ -554,6 +554,9 @@ class TorchGeneratorAgent(TorchAgent):
         self.model.train()
         self.zero_grad()
 
+        if getattr(batch, 'movies', None):
+            assert hasattr(self.model, 'ripplenet')
+            self.model.user_representation = self.model.ripplenet.user_representation(batch.movies)
         try:
             loss = self.compute_loss(batch)
             self.metrics['loss'] += loss.item()
@@ -589,6 +592,9 @@ class TorchGeneratorAgent(TorchAgent):
         bsz = batch.text_vec.size(0)
         self.model.eval()
         cand_scores = None
+        if getattr(batch, 'movies', None):
+            assert hasattr(self.model, 'ripplenet')
+            self.model.user_representation = self.model.ripplenet.user_representation(batch.movies)
 
         if batch.label_vec is not None:
             # calculate loss on targets with teacher forcing

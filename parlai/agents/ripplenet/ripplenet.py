@@ -2,6 +2,7 @@ import copy
 import os
 import pickle as pkl
 import re
+from collections import defaultdict
 
 import numpy as np
 import torch
@@ -128,14 +129,8 @@ class RipplenetAgent(TorchAgent):
             filter(lambda p: p.requires_grad, self.model.parameters()),
             opt["learningrate"],
         )
-        self.metrics = {"loss": 0.0, "base_loss": 0.0, "kge_loss": 0.0, "l2_loss": 0.0}
-        self.metrics["recall@1"] = []
-        self.metrics["recall@10"] = []
-        self.metrics["recall@50"] = []
-        self.metrics["num_tokens"] = 0
-        self.metrics["num_batches"] = 0
-        self.metrics["acc"] = 0.0
-        self.metrics["auc"] = 0.0
+        self.metrics = defaultdict(float)
+        self.counts = defaultdict(int)
 
     def report(self):
         """
@@ -146,34 +141,32 @@ class RipplenetAgent(TorchAgent):
         """
         base = super().report()
         m = {}
-        m["num_tokens"] = self.metrics["num_tokens"]
-        m["num_batches"] = self.metrics["num_batches"]
+        m["num_tokens"] = self.counts["num_tokens"]
+        m["num_batches"] = self.counts["num_batches"]
         m["loss"] = self.metrics["loss"] / m["num_batches"]
         m["base_loss"] = self.metrics["base_loss"] / m["num_batches"]
         m["kge_loss"] = self.metrics["kge_loss"] / m["num_batches"]
         m["l2_loss"] = self.metrics["l2_loss"] / m["num_batches"]
         m["acc"] = self.metrics["acc"] / m["num_tokens"]
         m["auc"] = self.metrics["auc"] / m["num_tokens"]
-        for x in ["1", "10", "50"]:
-            if f"recall@{x}" in self.metrics and self.metrics[f"recall@{x}"] != []:
-                m[f"recall@{x}"] = np.mean(self.metrics[f"recall@{x}"])
+        # Top-k recommendation Recall
+        for x in sorted(self.metrics):
+            if x.startswith("recall") and self.counts[x] > 200:
+                m[x] = self.metrics[x] / self.counts[x]
+                m["num_tokens_" + x] = self.counts[x]
+        # for x in ["1", "10", "50"]:
+        #     if f"recall@{x}" in self.metrics and self.metrics[f"recall@{x}"] != []:
+        #         m[f"recall@{x}"] = self.metrics[f"recall@{x}"] / m["num_tokens"]
         for k, v in m.items():
             # clean up: rounds to sigfigs and converts tensors to floats
             base[k] = round_sigfigs(v, 4)
         return base
 
     def reset_metrics(self):
-        self.metrics["loss"] = 0.0
-        self.metrics["base_loss"] = 0.0
-        self.metrics["kge_loss"] = 0.0
-        self.metrics["l2_loss"] = 0.0
-        self.metrics["recall@1"] = []
-        self.metrics["recall@10"] = []
-        self.metrics["recall@50"] = []
-        self.metrics["num_tokens"] = 0
-        self.metrics["num_batches"] = 0
-        self.metrics["acc"] = 0.0
-        self.metrics["auc"] = 0.0
+        for key in self.metrics:
+            self.metrics[key] = 0.0
+        for key in self.counts:
+            self.counts[key] = 0
 
     def share(self):
         """Share internal states."""
@@ -186,20 +179,20 @@ class RipplenetAgent(TorchAgent):
     def vectorize(self, obs, history, **kwargs):
         if "text" not in obs:
             return obs
-        # match movies
-        movie_pattern = re.compile(r"@\d+")
-        movie_input_match = re.findall(movie_pattern, history.get_history_str())
-        movie_input_match = [int(x[1:]) for x in movie_input_match]
-        movie_input_match = [x for x in movie_input_match if x in self.kg]
-        # match movies and entities
-        pattern = re.compile(r"@\d+|#\d+")
+        # # match movies
+        # movie_pattern = re.compile(r"@\d+")
+        # movie_input_match = re.findall(movie_pattern, history.get_history_str())
+        # movie_input_match = [int(x[1:]) for x in movie_input_match]
+        # movie_input_match = [x for x in movie_input_match if x in self.kg]
+        # # match movies and entities
+        # # pattern = re.compile(r"@\d+|#\d+")
         # pattern = re.compile(r"@\d+")
-        # pattern = re.compile(r"#\d+")
-        input_match = re.findall(pattern, history.get_history_str())
-        input_match = [int(x[1:]) for x in input_match]
-        input_match = [x for x in input_match if x in self.kg]
-        # print(input_match)
-        # print(list(self.kg.keys())[:10])
+        # # pattern = re.compile(r"#\d+")
+        # input_match = re.findall(pattern, history.get_history_str())
+        # input_match = [int(x[1:]) for x in input_match]
+        # input_match = [x for x in input_match if x in self.kg]
+        # # print(input_match)
+        # # print(list(self.kg.keys())[:10])
 
         if "labels" in obs:
             label_type = "labels"
@@ -209,20 +202,36 @@ class RipplenetAgent(TorchAgent):
             label_type = None
         if label_type is None:
             return obs
-        pattern = re.compile(r"@\d+")
-        labels_match = re.findall(pattern, obs[label_type][0])
-        labels_match = [int(x[1:]) for x in labels_match]
-        if movie_input_match == [] or input_match == [] or labels_match == []:
+        # pattern = re.compile(r"@\d+")
+        # labels_match = re.findall(pattern, obs[label_type][0])
+        # labels_match = [int(x[1:]) for x in labels_match]
+        # # if movie_input_match == [] or input_match == [] or labels_match == []:
+        # if labels_match == []:
+        #     del obs["text"], obs[label_type]
+        #     return obs
+
+
+        # mentioned movies
+        input_match = list(map(int, obs['label_candidates'][1].split()))
+        labels_match = list(map(int, obs['label_candidates'][2].split()))
+        entities_match = list(map(int, obs['label_candidates'][3].split()))
+
+        if labels_match == []:
             del obs["text"], obs[label_type]
             return obs
 
         input_vec = torch.zeros(self.n_entity)
         labels_vec = torch.zeros(self.n_entity, dtype=torch.long)
         input_vec[input_match] = 1
+        # input_vec[entities_match] = 1
         labels_vec[labels_match] = 1
 
         obs["text_vec"] = input_vec
         obs[label_type + "_vec"] = labels_vec
+
+        # turn no.
+        # obs["turn"] = int(obs['label_candidates'][0])
+        obs["turn"] = len(input_match)
 
         return obs
 
@@ -233,32 +242,33 @@ class RipplenetAgent(TorchAgent):
         items = torch.zeros(bs, dtype=torch.long)
         labels = torch.zeros(bs, dtype=torch.long)
         ripple_set = []
+        memories_h, memories_r, memories_t = [], [], []
         for i, (b, movieIdx) in enumerate(batch.label_vec.nonzero().tolist()):
             seed = batch.text_vec[b].nonzero().view(-1).tolist()
-            ripple_set.append(_get_ripple_set(self.kg, seed, self.n_hop, self.n_memory))
+            memories_h.append(seed)
+            # ripple_set.append(_get_ripple_set(self.kg, seed, self.n_hop, self.n_memory))
             items[i] = movieIdx
             labels[i] = 1
             # Negative samples
             # items[bs + i] = int(np.random.choice(self.movie_ids))
             # labels[bs + i] = 0
-        memories_h, memories_r, memories_t = [], [], []
-        for i in range(self.n_hop):
-            memories_h.append(
-                torch.LongTensor([ripple_set[idx % bs][i][0] for idx in range(bs)])
-            )
-            memories_r.append(
-                torch.LongTensor([ripple_set[idx % bs][i][1] for idx in range(bs)])
-            )
-            memories_t.append(
-                torch.LongTensor([ripple_set[idx % bs][i][2] for idx in range(bs)])
-            )
+        # for i in range(self.n_hop):
+        #     memories_h.append(
+        #         torch.LongTensor([ripple_set[idx % bs][i][0] for idx in range(bs)])
+        #     )
+        #     memories_r.append(
+        #         torch.LongTensor([ripple_set[idx % bs][i][1] for idx in range(bs)])
+        #     )
+        #     memories_t.append(
+        #         torch.LongTensor([ripple_set[idx % bs][i][2] for idx in range(bs)])
+        #     )
 
         if self.use_cuda:
             items = items.cuda()
             labels = labels.cuda()
-            memories_h = list(map(lambda x: x.cuda(), memories_h))
-            memories_r = list(map(lambda x: x.cuda(), memories_r))
-            memories_t = list(map(lambda x: x.cuda(), memories_t))
+            # memories_h = list(map(lambda x: x.cuda(), memories_h))
+            # memories_r = list(map(lambda x: x.cuda(), memories_r))
+            # memories_t = list(map(lambda x: x.cuda(), memories_t))
 
         return_dict = self.model(items, labels, memories_h, memories_r, memories_t)
         loss = return_dict["loss"]
@@ -270,8 +280,8 @@ class RipplenetAgent(TorchAgent):
         self.metrics["kge_loss"] += return_dict["kge_loss"].item()
         self.metrics["l2_loss"] += return_dict["l2_loss"].item()
         self.metrics["loss"] += loss.item()
-        self.metrics["num_tokens"] += bs
-        self.metrics["num_batches"] += 1
+        self.counts["num_tokens"] += bs
+        self.counts["num_batches"] += 1
         self._number_training_updates += 1
 
         self.model.eval()
@@ -305,33 +315,36 @@ class RipplenetAgent(TorchAgent):
         bs = (batch.label_vec == 1).sum().item()
         items = torch.zeros(bs, dtype=torch.long)
         labels = torch.zeros(bs, dtype=torch.long)
+        turns = []
         ripple_set = []
+        memories_h, memories_r, memories_t = [], [], []
         for i, (b, movieIdx) in enumerate(batch.label_vec.nonzero().tolist()):
             seed = batch.text_vec[b].nonzero().view(-1).tolist()
-            ripple_set.append(_get_ripple_set(self.kg, seed, self.n_hop, self.n_memory))
+            memories_h.append(seed)
+            # ripple_set.append(_get_ripple_set(self.kg, seed, self.n_hop, self.n_memory))
             items[i] = movieIdx
             labels[i] = 1
+            turns.append(batch.turn[b])
             # Negative samples
             # items[bs + i] = int(np.random.choice(self.movie_ids))
             # labels[bs + i] = 0
-        memories_h, memories_r, memories_t = [], [], []
-        for i in range(self.n_hop):
-            memories_h.append(
-                torch.LongTensor([ripple_set[idx % bs][i][0] for idx in range(bs)])
-            )
-            memories_r.append(
-                torch.LongTensor([ripple_set[idx % bs][i][1] for idx in range(bs)])
-            )
-            memories_t.append(
-                torch.LongTensor([ripple_set[idx % bs][i][2] for idx in range(bs)])
-            )
+        # for i in range(self.n_hop):
+        #     memories_h.append(
+        #         torch.LongTensor([ripple_set[idx % bs][i][0] for idx in range(bs)])
+        #     )
+        #     memories_r.append(
+        #         torch.LongTensor([ripple_set[idx % bs][i][1] for idx in range(bs)])
+        #     )
+        #     memories_t.append(
+        #         torch.LongTensor([ripple_set[idx % bs][i][2] for idx in range(bs)])
+        #     )
 
         if self.use_cuda:
             items = items.cuda()
             labels = labels.cuda()
-            memories_h = list(map(lambda x: x.cuda(), memories_h))
-            memories_r = list(map(lambda x: x.cuda(), memories_r))
-            memories_t = list(map(lambda x: x.cuda(), memories_t))
+            # memories_h = list(map(lambda x: x.cuda(), memories_h))
+            # memories_r = list(map(lambda x: x.cuda(), memories_r))
+            # memories_t = list(map(lambda x: x.cuda(), memories_t))
 
         return_dict = self.model(items, labels, memories_h, memories_r, memories_t)
         loss = return_dict["loss"].item()
@@ -340,8 +353,8 @@ class RipplenetAgent(TorchAgent):
         self.metrics["kge_loss"] += return_dict["kge_loss"].item()
         self.metrics["l2_loss"] += return_dict["l2_loss"].item()
         self.metrics["loss"] += loss
-        self.metrics["num_tokens"] += bs
-        self.metrics["num_batches"] += 1
+        self.counts["num_tokens"] += bs
+        self.counts["num_batches"] += 1
 
         # acc, auc = self.model.evaluate(
         #     items, labels, memories_h, memories_r, memories_t
@@ -358,10 +371,16 @@ class RipplenetAgent(TorchAgent):
         _, pred_idx = torch.topk(outputs, k=100, dim=1)
         for b in range(bs):
             target_idx = self.movie_ids.index(items[b].item())
-            self.metrics["recall@1"].append(int(target_idx in pred_idx[b][:1].tolist()))
-            self.metrics["recall@10"].append(
-                int(target_idx in pred_idx[b][:10].tolist())
-            )
-            self.metrics["recall@50"].append(
-                int(target_idx in pred_idx[b][:50].tolist())
-            )
+            self.metrics["recall@1"] += int(target_idx in pred_idx[b][:1].tolist())
+            self.metrics["recall@10"] += int(target_idx in pred_idx[b][:10].tolist())
+            self.metrics["recall@50"] += int(target_idx in pred_idx[b][:50].tolist())
+            self.metrics[f"recall@1@turn{turns[b]}"] += int(target_idx in pred_idx[b][:1].tolist())
+            self.metrics[f"recall@10@turn{turns[b]}"] += int(target_idx in pred_idx[b][:10].tolist())
+            self.metrics[f"recall@50@turn{turns[b]}"] += int(target_idx in pred_idx[b][:50].tolist())
+            self.counts[f"recall@1@turn{turns[b]}"] += 1
+            self.counts[f"recall@10@turn{turns[b]}"] += 1
+            self.counts[f"recall@50@turn{turns[b]}"] += 1
+            self.counts[f"recall@1"] += 1
+            self.counts[f"recall@10"] += 1
+            self.counts[f"recall@50"] += 1
+

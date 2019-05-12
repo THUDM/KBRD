@@ -14,17 +14,23 @@ if __name__ == '__main__':
     parser = setup_args()
     parser.set_defaults(
         task='redial',
-        dict_tokenizer='split',
-        model='autorec',
-        model_file='saved/autorec',
+        model='transformer_rec/generator',
+        model_file='saved/transformer_rec',
+        dict_tokenizer='nltk',
+        dict_lower=True,
         batchsize=64,
-        n_movies=64368,
-        validation_metric='recall@50',
-        validation_every_n_secs=5,
-        validation_patience=10,
+        truncate=1024,
+        dropout=0.1,
+        relu_dropout=0.1,
+        n_entity=64368,
+        n_relation=205,
+        validation_metric='nll_loss',
+        validation_metric_mode='min',
+        validation_every_n_secs=300,
+        validation_patience=5,
         tensorboard_log=True,
-        tensorboard_tag='task,model,batchsize,hiddensize,learningrate,model_file',
-        tensorboard_metrics="loss,recall@1,recall@10,recall@50",
+        tensorboard_tag="task,model,batchsize,ffn_size,embedding_size,n_layers,learningrate,model_file",
+        tensorboard_metrics="ppl,nll_loss,token_acc,bleu",
     )
     opt = parser.parse_args()
     TrainLoop(opt).train()

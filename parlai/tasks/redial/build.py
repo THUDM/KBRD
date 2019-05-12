@@ -170,7 +170,7 @@ def build(opt):
             if match is not None:
                 name, year = match.group(1).strip(), match.group(2)
             else:
-                name, year = movie[1].strip(), None
+                name, year = movie.strip(), None
             if year is not None:
                 if (name, year) in movie2entity:
                     id2entity[movie_id] = movie2entity[(name, year)]
@@ -184,6 +184,14 @@ def build(opt):
                 id2entity[movie_id] = (
                     movie2entity[(name, year)] if (name, year) in movie2entity else None
                 )
+        # HACK: make sure movies are matched to different entities
+        matched_entities = set()
+        for movie_id in id2entity:
+            if id2entity[movie_id] is not None:
+                if id2entity[movie_id] not in matched_entities:
+                    matched_entities.add(id2entity[movie_id])
+                else:
+                    id2entity[movie_id] = None
 
         # Extract sub-kg related to movies
         kg = _load_kg(DBPEDIA_PATH)
@@ -196,9 +204,12 @@ def build(opt):
             ],
             2,
         )
-        entities = set([k for k in subkg]) | set(
-            [x[1] for k in subkg for x in subkg[k]]
-        )
+        for movie_id in id2entity:
+            if id2entity[movie_id] is not None:
+                subkg[id2entity[movie_id]].append(('self_loop', id2entity[movie_id]))
+            else:
+                subkg[movie_id].append(('self_loop', movie_id))
+        entities = set([k for k in subkg]) | set([x[1] for k in subkg for x in subkg[k]])
         entity2entityId = dict([(k, i) for i, k in enumerate(entities)])
         relations = set([x[0] for k in subkg for x in subkg[k]])
         relation2relationId = dict([(k, i) for i, k in enumerate(relations)])
@@ -206,7 +217,9 @@ def build(opt):
         for h in subkg:
             for r, t in subkg[h]:
                 subkg_idx[entity2entityId[h]].append((relation2relationId[r], entity2entityId[t]))
-        movie_ids = [entity2entityId[id2entity[k]] for k in id2entity if id2entity[k] in entity2entityId]
+        movie_ids = []
+        for k in id2entity:
+            movie_ids.append(entity2entityId[id2entity[k]] if id2entity[k] is not None else entity2entityId[k])
 
         pkl.dump(id2entity, open(os.path.join(dpath, "id2entity.pkl"), "wb"))
         pkl.dump(dbpedia, open(os.path.join(dpath, "dbpedia.pkl"), "wb"))

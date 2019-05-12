@@ -47,25 +47,26 @@ class RippleNet(nn.Module):
     ):
         # [batch size, dim]
         # item_embeddings = self.entity_emb(items)
-        u_emb = self.entity_emb(memories_h[0])
-        u_emb = u_emb.mean(dim=1)
+        # u_emb = self.entity_emb(memories_h[0])
+        # u_emb = u_emb.mean(dim=1)
+        u_emb = self.user_representation(memories_h)
         # item_embeddings = u_emb
-        u_emb = torch.sigmoid(u_emb)
+        # u_emb = torch.sigmoid(u_emb)
         scores = self.output(u_emb)
         h_emb_list = []
         r_emb_list = []
         t_emb_list = []
-        for i in range(self.n_hop):
-            # [batch size, n_memory, dim]
-            h_emb_list.append(self.entity_emb(memories_h[i]))
-            # [batch size, n_memory, dim, dim]
-            r_emb_list.append(
-                self.relation_emb(memories_r[i]).view(
-                    -1, self.n_memory, self.dim, self.dim
-                )
-            )
-            # [batch size, n_memory, dim]
-            t_emb_list.append(self.entity_emb(memories_t[i]))
+        # for i in range(self.n_hop):
+        #     # [batch size, n_memory, dim]
+        #     h_emb_list.append(self.entity_emb(memories_h[i]))
+        #     # [batch size, n_memory, dim, dim]
+        #     r_emb_list.append(
+        #         self.relation_emb(memories_r[i]).view(
+        #             -1, self.n_memory, self.dim, self.dim
+        #         )
+        #     )
+        #     # [batch size, n_memory, dim]
+        #     t_emb_list.append(self.entity_emb(memories_t[i]))
 
         # o_list, item_embeddings = self._key_addressing(
         #     h_emb_list, r_emb_list, t_emb_list, item_embeddings
@@ -79,30 +80,45 @@ class RippleNet(nn.Module):
 
         return return_dict
 
+    def user_representation(self, movies_batch_list):
+        up_list = []
+        for movies in movies_batch_list:
+            if movies == []:
+                up_list.append(torch.zeros(self.dim).cuda())
+                continue
+            u_emb = self.entity_emb(torch.LongTensor(movies).cuda())
+            u_emb = u_emb.mean(dim=0)
+            # u_emb = torch.sigmoid(u_emb)
+            up_list.append(u_emb)
+        return torch.stack(up_list)
+
     def _compute_loss(self, scores, items, h_emb_list, t_emb_list, r_emb_list):
         base_loss = self.criterion(scores, items)
 
-        kge_loss = 0
-        for hop in range(self.n_hop):
-            # [batch size, n_memory, 1, dim]
-            h_expanded = torch.unsqueeze(h_emb_list[hop], dim=2)
-            # [batch size, n_memory, dim, 1]
-            t_expanded = torch.unsqueeze(t_emb_list[hop], dim=3)
-            # [batch size, n_memory, dim, dim]
-            hRt = torch.squeeze(
-                torch.matmul(torch.matmul(h_expanded, r_emb_list[hop]), t_expanded)
-            )
-            kge_loss += torch.sigmoid(hRt).mean()
-        kge_loss = -self.kge_weight * kge_loss
+        # kge_loss = 0
+        # for hop in range(self.n_hop):
+        #     # [batch size, n_memory, 1, dim]
+        #     h_expanded = torch.unsqueeze(h_emb_list[hop], dim=2)
+        #     # [batch size, n_memory, dim, 1]
+        #     t_expanded = torch.unsqueeze(t_emb_list[hop], dim=3)
+        #     # [batch size, n_memory, dim, dim]
+        #     hRt = torch.squeeze(
+        #         torch.matmul(torch.matmul(h_expanded, r_emb_list[hop]), t_expanded)
+        #     )
+        #     kge_loss += torch.sigmoid(hRt).mean()
+        # kge_loss = -self.kge_weight * kge_loss
+        kge_loss = torch.Tensor([0])
 
         l2_loss = 0
-        for hop in range(self.n_hop):
-            l2_loss += (h_emb_list[hop] * h_emb_list[hop]).sum()
-            l2_loss += (t_emb_list[hop] * t_emb_list[hop]).sum()
-            l2_loss += (r_emb_list[hop] * r_emb_list[hop]).sum()
-        l2_loss = self.l2_weight * l2_loss
+        # for hop in range(self.n_hop):
+        #     l2_loss += (h_emb_list[hop] * h_emb_list[hop]).sum()
+        #     l2_loss += (t_emb_list[hop] * t_emb_list[hop]).sum()
+        #     l2_loss += (r_emb_list[hop] * r_emb_list[hop]).sum()
+        # l2_loss = self.l2_weight * l2_loss
+        l2_loss = torch.Tensor([0])
 
-        loss = base_loss + kge_loss + l2_loss
+        # loss = base_loss + kge_loss + l2_loss
+        loss = base_loss
         return dict(base_loss=base_loss, kge_loss=kge_loss, l2_loss=l2_loss, loss=loss)
 
     def _key_addressing(self, h_emb_list, r_emb_list, t_emb_list, item_embeddings):

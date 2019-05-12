@@ -9,6 +9,7 @@ import requests
 
 import parlai.core.agents as core_agents
 from parlai.core.teachers import DialogTeacher
+from parlai.core.dict import DictionaryAgent
 
 from .build import build
 
@@ -89,23 +90,31 @@ class RedialTeacher(DialogTeacher):
     def _convert_ids_to_indices(self, text, questions):
         """@movieID -> @movieIdx"""
         pattern = re.compile("@\d+")
+        movieId_list = []
 
         def convert(match):
             movieId = match.group(0)
             try:
-                return "@" + str(self.entity2entityId[self.id2entity[int(movieId[1:])]])
+                entity = self.id2entity[int(movieId[1:])]
+                if entity is not None:
+                    movieId_list.append(str(self.entity2entityId[entity]))
+                else:
+                    movieId_list.append(str(self.entity2entityId[int(movieId[1:])]))
+                return DictionaryAgent.default_unk
             except Exception:
                 return ""
 
-        return re.sub(pattern, convert, text)
+        return re.sub(pattern, convert, text), movieId_list
 
-    def _append_entities(self, text):
-        """text -> text #entity1 #entity2"""
+    def _get_entities(self, text):
+        """text -> [#entity1, #entity2]"""
         entities = _text2entities(text, self.text_dict)
-        for entity in entities:
-            if entity in self.entity2entityId:
-                text += f" #{self.entity2entityId[entity]}"
-        return text
+        entities = [str(self.entity2entityId[x]) for x in entities if x in self.entity2entityId]
+        return entities
+        # for entity in entities:
+        #     if entity in self.entity2entityId:
+        #         text += f" #{self.entity2entityId[entity]}"
+        # return text
 
     def setup_data(self, path):
         self.instances = []
@@ -121,35 +130,43 @@ class RedialTeacher(DialogTeacher):
             message_idx = 0
             new_episode = True
 
+            previously_mentioned_movies_list = []
+            mentioned_entities = []
+            turn = 0
             while message_idx < len(messages):
-                source_text = ""
-                target_text = ""
-                if (
+                source_text = []
+                target_text = []
+                while (
                     message_idx < len(messages)
                     and messages[message_idx]["senderWorkerId"] == initiator_id
                 ):
-                    source_text = messages[message_idx]["text"]
+                    source_text.append(messages[message_idx]["text"])
                     message_idx += 1
-                if (
+                while (
                     message_idx < len(messages)
                     and messages[message_idx]["senderWorkerId"] == respondent_id
                 ):
-                    target_text = messages[message_idx]["text"]
+                    target_text.append(messages[message_idx]["text"])
                     message_idx += 1
-                if source_text != "" or target_text != "":
-                    # convert movieId to index [0..n_movies-1]
-                    # if source_text != "":
-                    #     source_text = self._append_entities(source_text)
-                    # if target_text != "":
-                    #     target_text = self._append_entities(target_text)
-                    source_text = self._convert_ids_to_indices(
+                source_text = [text for text in source_text if text != ""]
+                target_text = [text for text in target_text if text != ""]
+                if source_text != [] or target_text != []:
+                    for src in source_text:
+                        mentioned_entities += self._get_entities(src)
+                    for tgt in target_text:
+                        mentioned_entities += self._get_entities(tgt)
+                    source_text = '\n'.join(source_text)
+                    target_text = '\n'.join(target_text)
+                    source_text, source_movie_list = self._convert_ids_to_indices(
                         source_text, instance["initiatorQuestions"]
                     )
-                    target_text = self._convert_ids_to_indices(
+                    target_text, target_movie_list = self._convert_ids_to_indices(
                         target_text, instance["initiatorQuestions"]
                     )
-                    yield (source_text, [target_text], None, None, None), new_episode
+                    turn += 1
+                    yield (source_text, [target_text], None, [str(turn), ' '.join(previously_mentioned_movies_list + source_movie_list), ' '.join(target_movie_list), ' '.join(mentioned_entities), target_text], None), new_episode
                     new_episode = False
+                    previously_mentioned_movies_list += source_movie_list + target_movie_list
 
 
 class DefaultTeacher(RedialTeacher):

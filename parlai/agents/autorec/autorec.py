@@ -137,7 +137,7 @@ class AutorecAgent(TorchAgent):
             return obs
         labels_match = re.findall(pattern, obs[label_type][0])
         labels_match = [int(x[1:]) for x in labels_match]
-        if input_match == [] or labels_match == []:
+        if labels_match == []:
             del obs['text'], obs[label_type]
             return obs
 

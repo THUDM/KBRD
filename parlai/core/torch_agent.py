@@ -90,14 +90,14 @@ class Batch(AttrDict):
                  label_vec=None, label_lengths=None, labels=None,
                  valid_indices=None,
                  candidates=None, candidate_vecs=None,
-                 image=None, observations=None,
+                 image=None, observations=None, movies=None, turn=None,
                  **kwargs):
         super().__init__(
             text_vec=text_vec, text_lengths=text_lengths,
             label_vec=label_vec, label_lengths=label_lengths, labels=labels,
             valid_indices=valid_indices,
             candidates=candidates, candidate_vecs=candidate_vecs,
-            image=image, observations=observations,
+            image=image, observations=observations, movies=movies, turn=turn,
             **kwargs)
 
 
@@ -1204,11 +1204,21 @@ class TorchAgent(Agent):
         if any('image' in ex for ex in exs):
             imgs = [ex.get('image', None) for ex in exs]
 
+        # MOVIE ENTITIES
+        movies = None
+        if any('movies' in ex for ex in exs):
+            movies = [ex.get('movies', []) for ex in exs]
+
+        # Turn
+        turns = None
+        if any('turn' in ex for ex in exs):
+            turns = [ex.get('turn', None) for ex in exs]
+
         return Batch(text_vec=xs, text_lengths=x_lens, label_vec=ys,
                      label_lengths=y_lens, labels=labels,
                      valid_indices=valid_inds, candidates=cands,
                      candidate_vecs=cand_vecs, image=imgs,
-                     observations=exs)
+                     observations=exs, movies=movies, turn=turns)
 
     def match_batch(self, batch_reply, valid_inds, output=None):
         """
