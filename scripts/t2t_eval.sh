@@ -1,5 +1,5 @@
 #!/bin/bash
-let num_runs=16
+let num_runs=32
 
 for i in $(seq 0 $((num_runs-1)));
 do
