@@ -556,7 +556,7 @@ class TransformerGeneratorModel(TorchGeneratorModel):
             n_positions=n_positions,
         )
         self.ripplenet = RippleNet(opt['n_entity'],opt['n_relation'],opt['dim'],opt['n_hop'],opt['kge_weight'],opt['l2_weight'],opt['n_memory'],opt['item_update_mode'],opt['using_all_hops'])
-        state_dict = torch.load('saved/onlymovie_0hop')['model']
+        state_dict = torch.load('saved/both')['model']
         # state_dict = OrderedDict([('ripplenet.' + key, state_dict[key]) for key in state_dict])
         self.ripplenet.load_state_dict(state_dict)
         # self.user_representation_to_bias = nn.Linear(opt['dim'], len(dictionary))

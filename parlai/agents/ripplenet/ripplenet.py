@@ -223,7 +223,7 @@ class RipplenetAgent(TorchAgent):
         input_vec = torch.zeros(self.n_entity)
         labels_vec = torch.zeros(self.n_entity, dtype=torch.long)
         input_vec[input_match] = 1
-        # input_vec[entities_match] = 1
+        input_vec[entities_match] = 1
         labels_vec[labels_match] = 1
 
         obs["text_vec"] = input_vec
