@@ -230,6 +230,8 @@ class TransformerRecGeneratorAgent(TorchGeneratorAgent):
         kwargs['add_end'] = False
         obs = super().vectorize(obs, history, **kwargs)
 
+        if "text" not in obs:
+            return obs
         # match movies and entities
         input_match = list(map(int, obs['label_candidates'][1].split()))
         entities_match = list(map(int, obs['label_candidates'][3].split()))
