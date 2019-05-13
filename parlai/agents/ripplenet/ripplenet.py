@@ -15,44 +15,18 @@ from parlai.core.utils import round_sigfigs
 from .modules import RippleNet
 
 
-def _get_ripple_set(kg, original_set, n_hop, n_memory):
-    """Return: [(hop_0_heads, hop_0_relations, hop_0_tails), (hop_1_heads, hop_1_relations, hop_1_tails), ...]"""
-
-    ripple_set = []
-
-    for h in range(n_hop):
-        memories_h = []
-        memories_r = []
-        memories_t = []
-
-        if h == 0:
-            tails_of_last_hop = original_set
-        else:
-            tails_of_last_hop = ripple_set[-1][2]
-
-        for entity in tails_of_last_hop:
-            if entity not in kg:
+def _load_kg_embeddings(entity2entityId, dim, embedding_path):
+    kg_embeddings = torch.zeros(len(entity2entityId), dim)
+    with open(embedding_path, 'r') as f:
+        for line in f.readlines():
+            line = line.split('\t')
+            entity = line[0]
+            if entity not in entity2entityId:
                 continue
-            for tail_and_relation in kg[entity]:
-                memories_h.append(entity)
-                memories_r.append(tail_and_relation[0])
-                memories_t.append(tail_and_relation[1])
-
-        # if the current ripple set of the given user is empty, we simply copy the ripple set of the last hop here
-        # this won't happen for h = 0, because only the items that appear in the KG have been selected
-        # this only happens on 154 users in Book-Crossing dataset (since both BX dataset and the KG are sparse)
-        if len(memories_h) == 0:
-            ripple_set.append(ripple_set[-1])
-        else:
-            # sample a fixed-size 1-hop memory for each user
-            replace = len(memories_h) < n_memory
-            indices = np.random.choice(len(memories_h), size=n_memory, replace=replace)
-            memories_h = [memories_h[i] for i in indices]
-            memories_r = [memories_r[i] for i in indices]
-            memories_t = [memories_t[i] for i in indices]
-            ripple_set.append((memories_h, memories_r, memories_t))
-
-    return ripple_set
+            entityId = entity2entityId[entity]
+            embedding = torch.Tensor(list(map(float, line[1:])))
+            kg_embeddings[entityId] = embedding
+    return kg_embeddings
 
 
 class RipplenetAgent(TorchAgent):
@@ -90,6 +64,17 @@ class RipplenetAgent(TorchAgent):
         if not shared:
             # set up model from scratch
 
+            self.kg = pkl.load(
+                open(os.path.join(opt["datapath"], "redial", "subkg.pkl"), "rb")
+            )
+            self.movie_ids = pkl.load(
+                open(os.path.join(opt["datapath"], "redial", "movie_ids.pkl"), "rb")
+            )
+            entity2entityId = pkl.load(
+                open(os.path.join(opt["datapath"], "redial", "entity2entityId.pkl"), "rb")
+            )
+            entity_kg_emb = _load_kg_embeddings(entity2entityId, opt["dim"], "sub_joined_embeddings.tsv")
+
             # encoder captures the input text
             self.model = RippleNet(
                 n_entity=opt["n_entity"],
@@ -101,6 +86,8 @@ class RipplenetAgent(TorchAgent):
                 n_memory=opt["n_memory"],
                 item_update_mode=opt["item_update_mode"],
                 using_all_hops=opt["using_all_hops"],
+                kg=self.kg,
+                entity_kg_emb=entity_kg_emb
             )
             if init_model is not None:
                 # load model parameters if available
@@ -111,12 +98,6 @@ class RipplenetAgent(TorchAgent):
 
             if self.use_cuda:
                 self.model.cuda()
-            self.kg = pkl.load(
-                open(os.path.join(opt["datapath"], "redial", "subkg.pkl"), "rb")
-            )
-            self.movie_ids = pkl.load(
-                open(os.path.join(opt["datapath"], "redial", "movie_ids.pkl"), "rb")
-            )
 
         elif "ripplenet" in shared:
             # copy initialized data from shared table
@@ -238,74 +219,33 @@ class RipplenetAgent(TorchAgent):
     def train_step(self, batch):
         self.model.train()
         bs = (batch.label_vec == 1).sum().item()
-
-        items = torch.zeros(bs, dtype=torch.long)
         labels = torch.zeros(bs, dtype=torch.long)
-        ripple_set = []
-        memories_h, memories_r, memories_t = [], [], []
+
+        # create subgraph for propagation
+        seed_sets = []
         for i, (b, movieIdx) in enumerate(batch.label_vec.nonzero().tolist()):
-            seed = batch.text_vec[b].nonzero().view(-1).tolist()
-            memories_h.append(seed)
-            # ripple_set.append(_get_ripple_set(self.kg, seed, self.n_hop, self.n_memory))
-            items[i] = movieIdx
-            labels[i] = 1
-            # Negative samples
-            # items[bs + i] = int(np.random.choice(self.movie_ids))
-            # labels[bs + i] = 0
-        # for i in range(self.n_hop):
-        #     memories_h.append(
-        #         torch.LongTensor([ripple_set[idx % bs][i][0] for idx in range(bs)])
-        #     )
-        #     memories_r.append(
-        #         torch.LongTensor([ripple_set[idx % bs][i][1] for idx in range(bs)])
-        #     )
-        #     memories_t.append(
-        #         torch.LongTensor([ripple_set[idx % bs][i][2] for idx in range(bs)])
-        #     )
+            # seed set (i.e. mentioned movies + entitites)
+            seed_set = batch.text_vec[b].nonzero().view(-1).tolist()
+            labels[i] = movieIdx
+            seed_sets.append(seed_set)
 
         if self.use_cuda:
-            items = items.cuda()
             labels = labels.cuda()
-            # memories_h = list(map(lambda x: x.cuda(), memories_h))
-            # memories_r = list(map(lambda x: x.cuda(), memories_r))
-            # memories_t = list(map(lambda x: x.cuda(), memories_t))
 
-        return_dict = self.model(items, labels, memories_h, memories_r, memories_t)
+        return_dict = self.model(seed_sets, labels)
+
         loss = return_dict["loss"]
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
         self.metrics["base_loss"] += return_dict["base_loss"].item()
-        self.metrics["kge_loss"] += return_dict["kge_loss"].item()
-        self.metrics["l2_loss"] += return_dict["l2_loss"].item()
+        # self.metrics["l2_loss"] += return_dict["l2_loss"].item()
         self.metrics["loss"] += loss.item()
+
         self.counts["num_tokens"] += bs
         self.counts["num_batches"] += 1
         self._number_training_updates += 1
-
-        self.model.eval()
-        # acc, auc = self.model.evaluate(
-        #     items, labels, memories_h, memories_r, memories_t
-        # )
-        # self.metrics["acc"] += acc * bs
-        # self.metrics["auc"] += auc * bs
-
-    def _eval_topk_recommendation(self, bs, memories_h, memories_r, memories_t):
-        scores_list = []
-        for i in range(bs):
-            items = torch.LongTensor(self.movie_ids)
-            labels = torch.zeros(len(self.movie_ids))
-            if self.use_cuda:
-                items = items.cuda()
-                labels = labels.cuda()
-            h = list(map(lambda x: x[i].expand(len(self.movie_ids), -1), memories_h))
-            r = list(map(lambda x: x[i].expand(len(self.movie_ids), -1), memories_r))
-            t = list(map(lambda x: x[i].expand(len(self.movie_ids), -1), memories_t))
-            return_dict = self.model(items, labels, h, r, t)
-            scores = return_dict["scores"]
-            scores_list.append(scores)
-        return torch.stack(scores_list)
 
     def eval_step(self, batch):
         if batch.text_vec is None:
@@ -313,54 +253,31 @@ class RipplenetAgent(TorchAgent):
 
         self.model.eval()
         bs = (batch.label_vec == 1).sum().item()
-        items = torch.zeros(bs, dtype=torch.long)
         labels = torch.zeros(bs, dtype=torch.long)
+
+        # create subgraph for propagation
+        seed_sets = []
         turns = []
-        ripple_set = []
-        memories_h, memories_r, memories_t = [], [], []
         for i, (b, movieIdx) in enumerate(batch.label_vec.nonzero().tolist()):
-            seed = batch.text_vec[b].nonzero().view(-1).tolist()
-            memories_h.append(seed)
-            # ripple_set.append(_get_ripple_set(self.kg, seed, self.n_hop, self.n_memory))
-            items[i] = movieIdx
-            labels[i] = 1
+            # seed set (i.e. mentioned movies + entitites)
+            seed_set = batch.text_vec[b].nonzero().view(-1).tolist()
+            labels[i] = movieIdx
+            seed_sets.append(seed_set)
             turns.append(batch.turn[b])
-            # Negative samples
-            # items[bs + i] = int(np.random.choice(self.movie_ids))
-            # labels[bs + i] = 0
-        # for i in range(self.n_hop):
-        #     memories_h.append(
-        #         torch.LongTensor([ripple_set[idx % bs][i][0] for idx in range(bs)])
-        #     )
-        #     memories_r.append(
-        #         torch.LongTensor([ripple_set[idx % bs][i][1] for idx in range(bs)])
-        #     )
-        #     memories_t.append(
-        #         torch.LongTensor([ripple_set[idx % bs][i][2] for idx in range(bs)])
-        #     )
 
         if self.use_cuda:
-            items = items.cuda()
             labels = labels.cuda()
-            # memories_h = list(map(lambda x: x.cuda(), memories_h))
-            # memories_r = list(map(lambda x: x.cuda(), memories_r))
-            # memories_t = list(map(lambda x: x.cuda(), memories_t))
 
-        return_dict = self.model(items, labels, memories_h, memories_r, memories_t)
-        loss = return_dict["loss"].item()
+        return_dict = self.model(seed_sets, labels)
+
+        loss = return_dict["loss"]
 
         self.metrics["base_loss"] += return_dict["base_loss"].item()
-        self.metrics["kge_loss"] += return_dict["kge_loss"].item()
-        self.metrics["l2_loss"] += return_dict["l2_loss"].item()
-        self.metrics["loss"] += loss
+        # self.metrics["kge_loss"] += return_dict["kge_loss"].item()
+        # self.metrics["l2_loss"] += return_dict["l2_loss"].item()
+        self.metrics["loss"] += loss.item()
         self.counts["num_tokens"] += bs
         self.counts["num_batches"] += 1
-
-        # acc, auc = self.model.evaluate(
-        #     items, labels, memories_h, memories_r, memories_t
-        # )
-        # self.metrics["acc"] += acc * bs
-        # self.metrics["auc"] += auc * bs
 
         # with torch.no_grad():
         #     outputs = self._eval_topk_recommendation(
@@ -370,7 +287,7 @@ class RipplenetAgent(TorchAgent):
         outputs = outputs[:, torch.LongTensor(self.movie_ids)]
         _, pred_idx = torch.topk(outputs, k=100, dim=1)
         for b in range(bs):
-            target_idx = self.movie_ids.index(items[b].item())
+            target_idx = self.movie_ids.index(labels[b].item())
             self.metrics["recall@1"] += int(target_idx in pred_idx[b][:1].tolist())
             self.metrics["recall@10"] += int(target_idx in pred_idx[b][:10].tolist())
             self.metrics["recall@50"] += int(target_idx in pred_idx[b][:50].tolist())

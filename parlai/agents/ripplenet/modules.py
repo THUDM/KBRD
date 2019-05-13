@@ -1,9 +1,77 @@
+import math
+
+import networkx as nx
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 
+
+class GraphConvolution(nn.Module):
+    """
+    Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
+    """
+
+    def __init__(self, in_features, out_features, bias=True):
+        super(GraphConvolution, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features))
+        if bias:
+            self.bias = nn.Parameter(torch.FloatTensor(out_features))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1. / math.sqrt(self.weight.size(1))
+        self.weight.data.uniform_(-stdv, stdv)
+        if self.bias is not None:
+            self.bias.data.uniform_(-stdv, stdv)
+
+    def forward(self, input, adj):
+        support = torch.mm(input, self.weight)
+        output = torch.spmm(adj, support)
+        if self.bias is not None:
+            return output + self.bias
+        else:
+            return output
+
+    def __repr__(self):
+        return self.__class__.__name__ + ' (' \
+               + str(self.in_features) + ' -> ' \
+               + str(self.out_features) + ')'
+
+
+class GCN(nn.Module):
+    def __init__(self, nhid, dropout=0.5):
+        super(GCN, self).__init__()
+
+        self.gc1 = GraphConvolution(nhid, nhid)
+        self.gc2 = GraphConvolution(nhid, nhid)
+        self.dropout = dropout
+
+    def forward(self, x, adj):
+        """x: shape (|V|, |D|); adj: shape(|V|, |V|)"""
+        x = F.relu(self.gc1(x, adj))
+        x = F.dropout(x, self.dropout, training=self.training)
+        x = self.gc2(x, adj)
+        return x
+        # return F.log_softmax(x, dim=1)
+
+def _add_neighbors(kg, g, seed_set, hop):
+    tails_of_last_hop = seed_set
+    for h in range(hop):
+        next_tails_of_last_hop = []
+        for entity in tails_of_last_hop:
+            if entity not in kg:
+                continue
+            for tail_and_relation in kg[entity]:
+                g.add_edge(entity, tail_and_relation[1])
+                if entity != tail_and_relation[1]:
+                    next_tails_of_last_hop.append(tail_and_relation[1])
+        tails_of_last_hop = next_tails_of_last_hop
 
 class RippleNet(nn.Module):
     def __init__(
@@ -17,6 +85,8 @@ class RippleNet(nn.Module):
         n_memory,
         item_update_mode,
         using_all_hops,
+        kg,
+        entity_kg_emb
     ):
         super(RippleNet, self).__init__()
 
@@ -35,152 +105,63 @@ class RippleNet(nn.Module):
         self.transform_matrix = nn.Linear(self.dim, self.dim, bias=False)
         self.criterion = nn.CrossEntropyLoss()
         self.transform_matrix = nn.Linear(self.dim, self.dim, bias=False)
+        self.gcn = GCN(self.dim)
         self.output = nn.Linear(self.dim, self.n_entity)
+        self.kg = kg
+        # KG emb as initialization
+        self.entity_emb.weight.data[entity_kg_emb != 0] = entity_kg_emb[entity_kg_emb != 0]
 
     def forward(
         self,
-        items: torch.LongTensor,
+        seed_sets: list,
         labels: torch.LongTensor,
-        memories_h: list,
-        memories_r: list,
-        memories_t: list,
     ):
         # [batch size, dim]
-        # item_embeddings = self.entity_emb(items)
-        # u_emb = self.entity_emb(memories_h[0])
-        # u_emb = u_emb.mean(dim=1)
-        u_emb = self.user_representation(memories_h)
-        # item_embeddings = u_emb
-        # u_emb = torch.sigmoid(u_emb)
+        u_emb = self.user_representation(seed_sets)
         scores = self.output(u_emb)
-        h_emb_list = []
-        r_emb_list = []
-        t_emb_list = []
-        # for i in range(self.n_hop):
-        #     # [batch size, n_memory, dim]
-        #     h_emb_list.append(self.entity_emb(memories_h[i]))
-        #     # [batch size, n_memory, dim, dim]
-        #     r_emb_list.append(
-        #         self.relation_emb(memories_r[i]).view(
-        #             -1, self.n_memory, self.dim, self.dim
-        #         )
-        #     )
-        #     # [batch size, n_memory, dim]
-        #     t_emb_list.append(self.entity_emb(memories_t[i]))
 
-        # o_list, item_embeddings = self._key_addressing(
-        #     h_emb_list, r_emb_list, t_emb_list, item_embeddings
-        # )
-        # scores = self.predict(item_embeddings, [u_emb] + o_list)
+        base_loss = self.criterion(scores, labels)
 
-        return_dict = self._compute_loss(
-            scores, items, h_emb_list, t_emb_list, r_emb_list
-        )
-        return_dict["scores"] = scores.detach()
-
-        return return_dict
-
-    def user_representation(self, movies_batch_list):
-        up_list = []
-        for movies in movies_batch_list:
-            if movies == []:
-                up_list.append(torch.zeros(self.dim).cuda())
-                continue
-            u_emb = self.entity_emb(torch.LongTensor(movies).cuda())
-            u_emb = u_emb.mean(dim=0)
-            # u_emb = torch.sigmoid(u_emb)
-            up_list.append(u_emb)
-        return torch.stack(up_list)
-
-    def _compute_loss(self, scores, items, h_emb_list, t_emb_list, r_emb_list):
-        base_loss = self.criterion(scores, items)
-
-        # kge_loss = 0
-        # for hop in range(self.n_hop):
-        #     # [batch size, n_memory, 1, dim]
-        #     h_expanded = torch.unsqueeze(h_emb_list[hop], dim=2)
-        #     # [batch size, n_memory, dim, 1]
-        #     t_expanded = torch.unsqueeze(t_emb_list[hop], dim=3)
-        #     # [batch size, n_memory, dim, dim]
-        #     hRt = torch.squeeze(
-        #         torch.matmul(torch.matmul(h_expanded, r_emb_list[hop]), t_expanded)
-        #     )
-        #     kge_loss += torch.sigmoid(hRt).mean()
-        # kge_loss = -self.kge_weight * kge_loss
-        kge_loss = torch.Tensor([0])
-
-        l2_loss = 0
+        # l2_loss = 0
         # for hop in range(self.n_hop):
         #     l2_loss += (h_emb_list[hop] * h_emb_list[hop]).sum()
-        #     l2_loss += (t_emb_list[hop] * t_emb_list[hop]).sum()
-        #     l2_loss += (r_emb_list[hop] * r_emb_list[hop]).sum()
         # l2_loss = self.l2_weight * l2_loss
-        l2_loss = torch.Tensor([0])
+        # l2_loss = torch.Tensor([0])
 
-        # loss = base_loss + kge_loss + l2_loss
-        loss = base_loss
-        return dict(base_loss=base_loss, kge_loss=kge_loss, l2_loss=l2_loss, loss=loss)
+        return dict(scores=scores.detach(), base_loss=base_loss, loss=base_loss)
 
-    def _key_addressing(self, h_emb_list, r_emb_list, t_emb_list, item_embeddings):
-        o_list = []
-        for hop in range(self.n_hop):
-            # [batch_size, n_memory, dim, 1]
-            h_expanded = torch.unsqueeze(h_emb_list[hop], dim=3)
 
-            # [batch_size, n_memory, dim]
-            Rh = torch.squeeze(torch.matmul(r_emb_list[hop], h_expanded), dim=3)
+    def user_representation(self, seed_sets):
+        # find subgraph for this batch
+        g = nx.Graph()
+        for seed_set in seed_sets:
+            for seed in seed_set:
+                g.add_node(seed)
+            # _add_neighbors(self.kg, g, seed_set, hop=2)
+        # add self-loops
+        for node in g.nodes:
+            g.add_edge(node, node)
 
-            # [batch_size, dim, 1]
-            v = torch.unsqueeze(item_embeddings, dim=2)
+        # to cuda
+        nodes = torch.LongTensor(list(g.nodes))
+        adj = torch.FloatTensor(nx.to_numpy_matrix(g))
+        nodes = nodes.cuda()
+        adj = adj.cuda()
 
-            # [batch_size, n_memory]
-            probs = torch.squeeze(torch.matmul(Rh, v), dim=2)
+        nodes_features = self.entity_emb(nodes)
+        # print(nodes_features.shape, adj.shape)
+        # nodes_features = self.gcn(nodes_features, adj)
 
-            # [batch_size, n_memory]
-            probs_normalized = F.softmax(probs, dim=1)
+        node2id = dict([(n, i) for i, n in enumerate(list(g.nodes))])
+        user_representation_list = []
+        for seed_set in seed_sets:
+            if seed_set == []:
+                user_representation_list.append(torch.zeros(self.dim).cuda())
+                continue
+            seed_set_ids = list(map(lambda x: node2id[x], seed_set))
+            user_representation = nodes_features[seed_set_ids]
+            user_representation = user_representation.mean(dim=0)
+            # user_representation = torch.relu(user_representation)
+            user_representation_list.append(user_representation)
+        return torch.stack(user_representation_list)
 
-            # [batch_size, n_memory, 1]
-            probs_expanded = torch.unsqueeze(probs_normalized, dim=2)
-
-            # [batch_size, dim]
-            o = (t_emb_list[hop] * probs_expanded).sum(dim=1)
-
-            item_embeddings = self._update_item_embedding(item_embeddings, o)
-            o_list.append(o)
-        return o_list, item_embeddings
-
-    def _update_item_embedding(self, item_embeddings, o):
-        if self.item_update_mode == "replace":
-            item_embeddings = o
-        elif self.item_update_mode == "plus":
-            item_embeddings = item_embeddings + o
-        elif self.item_update_mode == "replace_transform":
-            item_embeddings = self.transform_matrix(o)
-        elif self.item_update_mode == "plus_transform":
-            item_embeddings = self.transform_matrix(item_embeddings + o)
-        elif self.item_update_mode == "identity":
-            pass
-        else:
-            raise Exception("Unknown item updating mode: " + self.item_update_mode)
-        return item_embeddings
-
-    def predict(self, item_embeddings, o_list):
-        y = o_list[-1]
-        if self.using_all_hops:
-            for o in o_list[:-1]:
-                y += o
-
-        # [batch_size]
-        scores = self.output(y)
-        # scores = (item_embeddings * y).sum(dim=1)
-        return scores
-        # return torch.sigmoid(scores)
-
-    def evaluate(self, items, labels, memories_h, memories_r, memories_t):
-        return_dict = self.forward(items, labels, memories_h, memories_r, memories_t)
-        scores = return_dict["scores"].cpu().numpy()
-        labels = labels.cpu().numpy()
-        auc = roc_auc_score(y_true=labels, y_score=scores)
-        predictions = [1 if i >= 0.5 else 0 for i in scores]
-        acc = np.mean(np.equal(predictions, labels))
-        return auc, acc
