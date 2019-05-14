@@ -6,13 +6,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import os
 import math
+import pickle as pkl
 from collections import OrderedDict
 import numpy as np
 
 from parlai.core.torch_generator_agent import TorchGeneratorModel
 from parlai.core.utils import neginf
 from parlai.agents.ripplenet.modules import RippleNet
+from parlai.agents.ripplenet.ripplenet import _load_kg_embeddings
 
 
 def _normalize(tensor, norm_layer):
@@ -555,8 +558,15 @@ class TransformerGeneratorModel(TorchGeneratorModel):
             opt, dictionary, self.embeddings, self.pad_idx,
             n_positions=n_positions,
         )
-        self.ripplenet = RippleNet(opt['n_entity'],opt['n_relation'],opt['dim'],opt['n_hop'],opt['kge_weight'],opt['l2_weight'],opt['n_memory'],opt['item_update_mode'],opt['using_all_hops'])
-        state_dict = torch.load('saved/both')['model']
+        kg = pkl.load(
+            open(os.path.join(opt["datapath"], "redial", "subkg.pkl"), "rb")
+        )
+        entity2entityId = pkl.load(
+            open(os.path.join(opt["datapath"], "redial", "entity2entityId.pkl"), "rb")
+        )
+        entity_kg_emb = _load_kg_embeddings(entity2entityId, opt["dim"], "sub_joined_embeddings.tsv")
+        self.ripplenet = RippleNet(opt['n_entity'],opt['n_relation'],opt['dim'],opt['n_hop'],opt['kge_weight'],opt['l2_weight'],opt['n_memory'],opt['item_update_mode'],opt['using_all_hops'], kg, entity_kg_emb)
+        state_dict = torch.load('saved/both_kg')['model']
         # state_dict = OrderedDict([('ripplenet.' + key, state_dict[key]) for key in state_dict])
         self.ripplenet.load_state_dict(state_dict)
         # self.user_representation_to_bias = nn.Linear(opt['dim'], len(dictionary))

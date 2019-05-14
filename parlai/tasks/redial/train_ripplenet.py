@@ -21,7 +21,7 @@ if __name__ == "__main__":
         fp16=True,
         batchsize=256,
         n_entity=64368,
-        n_relation=205,
+        n_relation=214,
         # validation_metric="recall@50",
         validation_metric="loss",
         validation_every_n_secs=30,

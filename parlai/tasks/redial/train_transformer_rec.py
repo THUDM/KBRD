@@ -23,7 +23,7 @@ if __name__ == '__main__':
         dropout=0.1,
         relu_dropout=0.1,
         n_entity=64368,
-        n_relation=205,
+        n_relation=214,
         validation_metric='nll_loss',
         validation_metric_mode='min',
         validation_every_n_secs=300,
