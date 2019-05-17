@@ -27,7 +27,7 @@ class AutorecAgent(TorchAgent):
             "-hs",
             "--hiddensize",
             type=int,
-            default=1000,
+            default=128,
             help="size of the hidden layers",
         )
         agent.add_argument(
@@ -144,6 +144,7 @@ class AutorecAgent(TorchAgent):
         input_vec = torch.zeros(self.n_movies)
         labels_vec = torch.zeros(self.n_movies, dtype=torch.long)
         input_vec[input_match] = 1
+        # input_vec[entities_match] = 1
         labels_vec[labels_match] = 1
 
         obs["text_vec"] = input_vec
