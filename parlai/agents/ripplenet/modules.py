@@ -1,4 +1,5 @@
 import math
+from collections import defaultdict
 
 import networkx as nx
 import numpy as np
@@ -6,6 +7,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
+
+from torch_geometric.nn.conv.gcn_conv import GCNConv
+from torch_geometric.nn.conv.gat_conv import GATConv
+from torch_geometric.nn.conv.rgcn_conv import RGCNConv
 
 
 def kaiming_reset_parameters(linear_module):
@@ -249,10 +254,11 @@ class SpGraphAttentionLayer(nn.Module):
         self.W = nn.Parameter(torch.zeros(size=(in_features, out_features)))
         nn.init.xavier_normal_(self.W.data, gain=1.414)
 
-        self.a = nn.Parameter(torch.zeros(size=(1, 2*out_features)))
+        # self.a = nn.Parameter(torch.zeros(size=(1, 2*out_features)))
+        self.a = nn.Parameter(torch.zeros(size=(1, out_features)))
         nn.init.xavier_normal_(self.a.data, gain=1.414)
 
-        self.dropout = nn.Dropout(dropout)
+        # self.dropout = nn.Dropout(dropout)
         self.leakyrelu = nn.LeakyReLU(self.alpha)
         self.special_spmm = SpecialSpmm()
 
@@ -266,7 +272,8 @@ class SpGraphAttentionLayer(nn.Module):
         assert not torch.isnan(h).any()
 
         # Self-attention on the nodes - Shared attention mechanism
-        edge_h = torch.cat((h[edge[0, :], :], h[edge[1, :], :]), dim=1).t()
+        # edge_h = torch.cat((h[edge[0, :], :], h[edge[1, :], :]), dim=1).t()
+        edge_h = h[edge[1, :], :].t()
         # edge: 2*D x E
 
         edge_e = torch.exp(-self.leakyrelu(self.a.mm(edge_h).squeeze()))
@@ -276,7 +283,7 @@ class SpGraphAttentionLayer(nn.Module):
         e_rowsum = self.special_spmm(edge, edge_e, torch.Size([N, N]), torch.ones(size=(N,1)).cuda())
         # e_rowsum: N x 1
 
-        edge_e = self.dropout(edge_e)
+        # edge_e = self.dropout(edge_e)
         # edge_e: E
 
         h_prime = self.special_spmm(edge, edge_e, torch.Size([N, N]), h)
@@ -347,20 +354,31 @@ def _add_neighbors(kg, g, seed_set, hop):
         tails_of_last_hop = next_tails_of_last_hop
 
 # http://dbpedia.org/ontology/director
-EDGE_TYPES = [58]
+EDGE_TYPES = [58, 172]
 def _edge_list(kg, n_entity, hop):
     edge_list = []
     for h in range(hop):
         for entity in range(n_entity):
             # add self loop
-            edge_list.append((entity, entity))
+            # edge_list.append((entity, entity))
+            # self_loop id = 185
+            edge_list.append((entity, entity, 185))
             if entity not in kg:
                 continue
             for tail_and_relation in kg[entity]:
-                if entity != tail_and_relation[1] and tail_and_relation[0] in EDGE_TYPES:
-                    edge_list.append((entity, tail_and_relation[1]))
-                    edge_list.append((tail_and_relation[1], entity))
-    return edge_list
+                if entity != tail_and_relation[1] and tail_and_relation[0] != 185 :# and tail_and_relation[0] in EDGE_TYPES:
+                    edge_list.append((entity, tail_and_relation[1], tail_and_relation[0]))
+                    edge_list.append((tail_and_relation[1], entity, tail_and_relation[0]))
+
+    relation_cnt = defaultdict(int)
+    relation_idx = {}
+    for h, t, r in edge_list:
+        relation_cnt[r] += 1
+    for h, t, r in edge_list:
+        if relation_cnt[r] > 100 and r not in relation_idx:
+            relation_idx[r] = len(relation_idx)
+
+    return [(h, t, relation_idx[r]) for h, t, r in edge_list if relation_cnt[r] > 100], len(relation_idx)
 
 class RippleNet(nn.Module):
     def __init__(
@@ -376,7 +394,8 @@ class RippleNet(nn.Module):
         using_all_hops,
         kg,
         entity_kg_emb,
-        entity_text_emb
+        entity_text_emb,
+        num_bases
     ):
         super(RippleNet, self).__init__()
 
@@ -413,6 +432,9 @@ class RippleNet(nn.Module):
         #     nn.Linear(128, self.dim),
         # )
         # self.gat = SpGAT(self.dim, self.dim, self.dim, dropout=0., alpha=0.2, nheads=4)
+        # self.gcn = GCNConv(self.dim, self.dim)
+        # self.gat = GATConv(self.dim, self.dim, dropout=0.1)
+
         self.self_attn = SelfAttentionLayer(self.dim, self.dim)
         # self.self_attn = SelfAttentionLayer2(self.dim, self.dim)
         # self.bi_attn = BiAttention(self.dim, dropout=0)
@@ -441,10 +463,15 @@ class RippleNet(nn.Module):
         #     nn.Linear(self.dim, self.dim),
         # )
 
-        edge_list = _edge_list(self.kg, self.n_entity, hop=2)
+        edge_list, self.n_relation = _edge_list(self.kg, self.n_entity, hop=2)
+        self.rgcn = RGCNConv(self.n_entity, self.dim, self.n_relation, num_bases=num_bases)
         edge_list = list(set(edge_list))
-        print(len(edge_list))
-        self.adj = torch.sparse.FloatTensor(torch.LongTensor(edge_list).t(), torch.ones(len(edge_list))).cuda()
+        print(len(edge_list), self.n_relation)
+        edge_list_tensor = torch.LongTensor(edge_list).cuda()
+        # self.adj = torch.sparse.FloatTensor(edge_list_tensor[:, :2].t(), torch.ones(len(edge_list))).cuda()
+        # self.edge_idx = self.adj._indices()
+        self.edge_idx = edge_list_tensor[:, :2].t()
+        self.edge_type = edge_list_tensor[:, 2]
 
     def _get_triples(self, kg):
         triples = []
@@ -572,10 +599,11 @@ class RippleNet(nn.Module):
         # nodes_features = self.transform(nodes_embed + nodes_features)
         # nodes_features = self.transform(self.entity_text_emb)
         # nodes_features = self.gcn(self.entity_emb.weight, self.adj)
-        nodes_features = self.entity_emb.weight
+        # nodes_features = self.entity_emb.weight
         # nodes_features += self.transform(self.entity_text_emb)
-        # nodes_features = self.gcn(self.entity_text_emb, self.adj)
-        # nodes_features = self.gat(nodes_features, self.adj)
+        # nodes_features = self.gcn(nodes_features, self.edge_idx)
+        # nodes_features = self.gat(nodes_features, self.edge_idx)
+        nodes_features = self.rgcn(None, self.edge_idx, self.edge_type)
 
         # node2id = dict([(n, i) for i, n in enumerate(list(g.nodes))])
         user_representation_list = []

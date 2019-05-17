@@ -93,6 +93,7 @@ class RipplenetAgent(TorchAgent):
         agent.add_argument(
             "-lr", "--learningrate", type=float, default=1e-3, help="learning rate"
         )
+        agent.add_argument("-nb", "--num-bases", type=int, default=7)
         RipplenetAgent.dictionary_class().add_cmdline_args(argparser)
         return agent
 
@@ -136,7 +137,8 @@ class RipplenetAgent(TorchAgent):
                 using_all_hops=opt["using_all_hops"],
                 kg=self.kg,
                 entity_kg_emb=entity_kg_emb,
-                entity_text_emb=entity_text_emb
+                entity_text_emb=entity_text_emb,
+                num_bases=opt["num_bases"]
             )
             if init_model is not None:
                 # load model parameters if available
