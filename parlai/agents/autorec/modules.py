@@ -1,8 +1,15 @@
+import math
+
 import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
 
+def init_weight(linear_module):
+    stdv = 1. / math.sqrt(linear_module.weight.size(1))
+    linear_module.weight.data.uniform_(-stdv, stdv)
+    if linear_module.bias is not None:
+        linear_module.bias.data.uniform_(-stdv, stdv)
 
 class UserEncoder(nn.Module):
     def __init__(self, layer_sizes, n_movies, f):

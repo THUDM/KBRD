@@ -31,7 +31,7 @@ class AutorecAgent(TorchAgent):
             help="size of the hidden layers",
         )
         agent.add_argument(
-            "-lr", "--learningrate", type=float, default=0.0001, help="learning rate"
+            "-lr", "--learningrate", type=float, default=0.001, help="learning rate"
         )
         agent.add_argument(
             "--gpu", type=int, default=-1, help="which GPU device to use"
@@ -122,10 +122,6 @@ class AutorecAgent(TorchAgent):
     def vectorize(self, obs, history, **kwargs):
         if "text" not in obs:
             return obs
-        # TODO: do sentiment analysis when testing or ignore like/dislike
-        pattern = re.compile(r"@\d+")
-        input_match = re.findall(pattern, history.get_history_str())
-        input_match = [int(x[1:]) for x in input_match]
 
         if "labels" in obs:
             label_type = "labels"
@@ -135,8 +131,12 @@ class AutorecAgent(TorchAgent):
             label_type = None
         if label_type is None:
             return obs
-        labels_match = re.findall(pattern, obs[label_type][0])
-        labels_match = [int(x[1:]) for x in labels_match]
+
+        # mentioned movies
+        input_match = list(map(int, obs['label_candidates'][1].split()))
+        labels_match = list(map(int, obs['label_candidates'][2].split()))
+        entities_match = list(map(int, obs['label_candidates'][3].split()))
+
         if labels_match == []:
             del obs['text'], obs[label_type]
             return obs

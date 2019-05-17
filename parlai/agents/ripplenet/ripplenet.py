@@ -8,11 +8,16 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
+from sklearn.feature_extraction.text import TfidfVectorizer
+from gensim.models.doc2vec import TaggedDocument, Doc2Vec
+import nltk
+
 
 from parlai.core.torch_agent import Output, TorchAgent
 from parlai.core.utils import round_sigfigs
 
 from .modules import RippleNet
+
 
 
 def _load_kg_embeddings(entity2entityId, dim, embedding_path):
@@ -28,6 +33,45 @@ def _load_kg_embeddings(entity2entityId, dim, embedding_path):
             kg_embeddings[entityId] = embedding
     return kg_embeddings
 
+def _load_text_embeddings(entity2entityId, dim, abstract_path):
+    entities = []
+    texts = []
+    sent_tok = nltk.data.load('tokenizers/punkt/english.pickle')
+    word_tok = nltk.tokenize.treebank.TreebankWordTokenizer()
+    def nltk_tokenize(text):
+        return [token for sent in sent_tok.tokenize(text)
+                for token in word_tok.tokenize(sent)]
+
+    with open(abstract_path, 'r') as f:
+        for line in f.readlines():
+            try:
+                entity = line[:line.index('>')+1]
+                if entity not in entity2entityId:
+                    continue
+                line = line[line.index('> "')+2:len(line)-line[::-1].index('@')-1]
+                entities.append(entity)
+                texts.append(line.replace('\\', ''))
+            except Exception:
+                pass
+    vec_dim = 64
+    try:
+        model = Doc2Vec.load('doc2vec')
+    except Exception:
+        corpus = [nltk_tokenize(text) for text in texts]
+        corpus = [
+            TaggedDocument(words, ['d{}'.format(idx)])
+            for idx, words in enumerate(corpus)
+        ]
+        model = Doc2Vec(corpus, vector_size=vec_dim, min_count=5, workers=28)
+        model.save('doc2vec')
+
+    # vectorizer = TfidfVectorizer(stop_words='english', tokenizer=nltk_tokenize, min_df=3)
+    # text_embeddings = vectorizer.fit_transform(texts)
+    full_text_embeddings = torch.zeros(len(entity2entityId), vec_dim)
+    for i, entity in enumerate(entities):
+        full_text_embeddings[entity2entityId[entity]] = torch.from_numpy(model.docvecs[i])
+
+    return full_text_embeddings
 
 class RipplenetAgent(TorchAgent):
     @classmethod
@@ -47,7 +91,7 @@ class RipplenetAgent(TorchAgent):
         )
         agent.add_argument("-uah", "--using-all-hops", type=bool, default=True)
         agent.add_argument(
-            "-lr", "--learningrate", type=float, default=1e-2, help="learning rate"
+            "-lr", "--learningrate", type=float, default=1e-3, help="learning rate"
         )
         RipplenetAgent.dictionary_class().add_cmdline_args(argparser)
         return agent
@@ -73,7 +117,11 @@ class RipplenetAgent(TorchAgent):
             entity2entityId = pkl.load(
                 open(os.path.join(opt["datapath"], "redial", "entity2entityId.pkl"), "rb")
             )
-            entity_kg_emb = _load_kg_embeddings(entity2entityId, opt["dim"], "sub_joined_embeddings.tsv")
+            entity_kg_emb = None
+            # entity_kg_emb = _load_kg_embeddings(entity2entityId, opt["dim"], "sub_joined_embeddings.tsv")
+            abstract_path = 'dbpedia/short_abstracts_en.ttl'
+            entity_text_emb = None
+            # entity_text_emb = _load_text_embeddings(entity2entityId, opt["dim"], abstract_path)
 
             # encoder captures the input text
             self.model = RippleNet(
@@ -87,7 +135,8 @@ class RipplenetAgent(TorchAgent):
                 item_update_mode=opt["item_update_mode"],
                 using_all_hops=opt["using_all_hops"],
                 kg=self.kg,
-                entity_kg_emb=entity_kg_emb
+                entity_kg_emb=entity_kg_emb,
+                entity_text_emb=entity_text_emb
             )
             if init_model is not None:
                 # load model parameters if available
@@ -98,18 +147,19 @@ class RipplenetAgent(TorchAgent):
 
             if self.use_cuda:
                 self.model.cuda()
+            self.optimizer = torch.optim.Adam(
+                filter(lambda p: p.requires_grad, self.model.parameters()),
+                opt["learningrate"],
+            )
 
         elif "ripplenet" in shared:
             # copy initialized data from shared table
             self.model = shared["ripplenet"]
             self.kg = shared["kg"]
             self.movie_ids = shared["movie_ids"]
+            self.optimizer = shared["optimizer"]
 
         # self.criterion = nn.NLLLoss()
-        self.optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.model.parameters()),
-            opt["learningrate"],
-        )
         self.metrics = defaultdict(float)
         self.counts = defaultdict(int)
 
@@ -155,6 +205,7 @@ class RipplenetAgent(TorchAgent):
         shared["ripplenet"] = self.model
         shared["kg"] = self.kg
         shared["movie_ids"] = self.movie_ids
+        shared["optimizer"] = self.optimizer
         return shared
 
     def vectorize(self, obs, history, **kwargs):
@@ -240,7 +291,8 @@ class RipplenetAgent(TorchAgent):
         self.optimizer.step()
 
         self.metrics["base_loss"] += return_dict["base_loss"].item()
-        # self.metrics["l2_loss"] += return_dict["l2_loss"].item()
+        self.metrics["kge_loss"] += return_dict["kge_loss"].item()
+        self.metrics["l2_loss"] += return_dict["l2_loss"].item()
         self.metrics["loss"] += loss.item()
 
         self.counts["num_tokens"] += bs
@@ -273,8 +325,8 @@ class RipplenetAgent(TorchAgent):
         loss = return_dict["loss"]
 
         self.metrics["base_loss"] += return_dict["base_loss"].item()
-        # self.metrics["kge_loss"] += return_dict["kge_loss"].item()
-        # self.metrics["l2_loss"] += return_dict["l2_loss"].item()
+        self.metrics["kge_loss"] += return_dict["kge_loss"].item()
+        self.metrics["l2_loss"] += return_dict["l2_loss"].item()
         self.metrics["loss"] += loss.item()
         self.counts["num_tokens"] += bs
         self.counts["num_batches"] += 1

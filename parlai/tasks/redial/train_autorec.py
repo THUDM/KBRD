@@ -21,7 +21,7 @@ if __name__ == '__main__':
         n_movies=64368,
         validation_metric='recall@50',
         validation_every_n_secs=5,
-        validation_patience=10,
+        validation_patience=20,
         tensorboard_log=True,
         tensorboard_tag='task,model,batchsize,hiddensize,learningrate,model_file',
         tensorboard_metrics="loss,recall@1,recall@10,recall@50",
