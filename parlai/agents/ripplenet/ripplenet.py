@@ -91,9 +91,9 @@ class RipplenetAgent(TorchAgent):
         )
         agent.add_argument("-uah", "--using-all-hops", type=bool, default=True)
         agent.add_argument(
-            "-lr", "--learningrate", type=float, default=1e-3, help="learning rate"
+            "-lr", "--learningrate", type=float, default=3e-3, help="learning rate"
         )
-        agent.add_argument("-nb", "--num-bases", type=int, default=9)
+        agent.add_argument("-nb", "--num-bases", type=int, default=8)
         RipplenetAgent.dictionary_class().add_cmdline_args(argparser)
         return agent
 

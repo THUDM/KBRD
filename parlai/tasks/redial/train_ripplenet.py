@@ -26,7 +26,7 @@ if __name__ == "__main__":
         validation_metric="base_loss",
         validation_metric_mode='min',
         validation_every_n_secs=30,
-        validation_patience=10,
+        validation_patience=5,
         tensorboard_log=True,
         tensorboard_tag="task,model,batchsize,dim,learningrate,model_file",
         tensorboard_metrics="loss,base_loss,kge_loss,l2_loss,acc,auc,recall@1,recall@10,recall@50",
