@@ -81,7 +81,7 @@ class RipplenetAgent(TorchAgent):
         agent = argparser.add_argument_group("Arguments")
         agent.add_argument("-ne", "--n-entity", type=int)
         agent.add_argument("-nr", "--n-relation", type=int)
-        agent.add_argument("-dim", "--dim", type=int, default=16)
+        agent.add_argument("-dim", "--dim", type=int, default=128)
         agent.add_argument("-hop", "--n-hop", type=int, default=2)
         agent.add_argument("-kgew", "--kge-weight", type=float, default=1)
         agent.add_argument("-l2w", "--l2-weight", type=float, default=2.5e-6)
@@ -93,7 +93,7 @@ class RipplenetAgent(TorchAgent):
         agent.add_argument(
             "-lr", "--learningrate", type=float, default=1e-3, help="learning rate"
         )
-        agent.add_argument("-nb", "--num-bases", type=int, default=7)
+        agent.add_argument("-nb", "--num-bases", type=int, default=9)
         RipplenetAgent.dictionary_class().add_cmdline_args(argparser)
         return agent
 

@@ -375,10 +375,10 @@ def _edge_list(kg, n_entity, hop):
     for h, t, r in edge_list:
         relation_cnt[r] += 1
     for h, t, r in edge_list:
-        if relation_cnt[r] > 100 and r not in relation_idx:
+        if relation_cnt[r] > 1000 and r not in relation_idx:
             relation_idx[r] = len(relation_idx)
 
-    return [(h, t, relation_idx[r]) for h, t, r in edge_list if relation_cnt[r] > 100], len(relation_idx)
+    return [(h, t, relation_idx[r]) for h, t, r in edge_list if relation_cnt[r] > 1000], len(relation_idx)
 
 class RippleNet(nn.Module):
     def __init__(
