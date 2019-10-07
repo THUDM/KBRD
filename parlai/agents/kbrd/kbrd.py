@@ -16,7 +16,7 @@ import nltk
 from parlai.core.torch_agent import Output, TorchAgent
 from parlai.core.utils import round_sigfigs
 
-from .modules import RippleNet
+from .modules import KBRD
 
 
 
@@ -73,11 +73,11 @@ def _load_text_embeddings(entity2entityId, dim, abstract_path):
 
     return full_text_embeddings
 
-class RipplenetAgent(TorchAgent):
+class KBRDAgent(TorchAgent):
     @classmethod
     def add_cmdline_args(cls, argparser):
         """Add command-line arguments specifically for this agent."""
-        super(RipplenetAgent, cls).add_cmdline_args(argparser)
+        super(KBRDAgent, cls).add_cmdline_args(argparser)
         agent = argparser.add_argument_group("Arguments")
         agent.add_argument("-ne", "--n-entity", type=int)
         agent.add_argument("-nr", "--n-relation", type=int)
@@ -94,14 +94,14 @@ class RipplenetAgent(TorchAgent):
             "-lr", "--learningrate", type=float, default=3e-3, help="learning rate"
         )
         agent.add_argument("-nb", "--num-bases", type=int, default=8)
-        RipplenetAgent.dictionary_class().add_cmdline_args(argparser)
+        KBRDAgent.dictionary_class().add_cmdline_args(argparser)
         return agent
 
     def __init__(self, opt, shared=None):
         super().__init__(opt, shared)
         init_model, is_finetune = self._get_init_model(opt, shared)
 
-        self.id = "RipplenetAgent"
+        self.id = "KBRDAgent"
         self.n_entity = opt["n_entity"]
         self.n_hop = opt["n_hop"]
         self.n_memory = opt["n_memory"]
@@ -125,7 +125,7 @@ class RipplenetAgent(TorchAgent):
             # entity_text_emb = _load_text_embeddings(entity2entityId, opt["dim"], abstract_path)
 
             # encoder captures the input text
-            self.model = RippleNet(
+            self.model = KBRD(
                 n_entity=opt["n_entity"],
                 n_relation=opt["n_relation"],
                 dim=opt["dim"],
@@ -154,9 +154,9 @@ class RipplenetAgent(TorchAgent):
                 opt["learningrate"],
             )
 
-        elif "ripplenet" in shared:
+        elif "kbrd" in shared:
             # copy initialized data from shared table
-            self.model = shared["ripplenet"]
+            self.model = shared["kbrd"]
             self.kg = shared["kg"]
             self.movie_ids = shared["movie_ids"]
             self.optimizer = shared["optimizer"]
@@ -204,7 +204,7 @@ class RipplenetAgent(TorchAgent):
     def share(self):
         """Share internal states."""
         shared = super().share()
-        shared["ripplenet"] = self.model
+        shared["kbrd"] = self.model
         shared["kg"] = self.kg
         shared["movie_ids"] = self.movie_ids
         shared["optimizer"] = self.optimizer

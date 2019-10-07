@@ -15,9 +15,9 @@ if __name__ == "__main__":
     parser.set_defaults(
         task="redial",
         dict_tokenizer="split",
-        model="ripplenet",
+        model="kbrd",
         dict_file="saved/tmp",
-        model_file="saved/ripplenet",
+        model_file="saved/kbrd",
         fp16=True,
         batchsize=256,
         n_entity=64368,

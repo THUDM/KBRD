@@ -380,7 +380,7 @@ def _edge_list(kg, n_entity, hop):
 
     return [(h, t, relation_idx[r]) for h, t, r in edge_list if relation_cnt[r] > 1000], len(relation_idx)
 
-class RippleNet(nn.Module):
+class KBRD(nn.Module):
     def __init__(
         self,
         n_entity,
@@ -397,7 +397,7 @@ class RippleNet(nn.Module):
         entity_text_emb,
         num_bases
     ):
-        super(RippleNet, self).__init__()
+        super(KBRD, self).__init__()
 
         self.n_entity = n_entity
         self.n_relation = n_relation

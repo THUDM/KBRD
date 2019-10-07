@@ -41,7 +41,7 @@ if __name__ == '__main__':
     agent = create_agent(opt, requireModelExists=True)
     entity2entityId = pkl.load(open('data/redial/entity2entityId.pkl', 'rb'))
 
-    up = agent.model.ripplenet.user_representation([
+    up = agent.model.kbrd.user_representation([
         list(map(lambda x: entity2entityId[x], movie_entities))
     ])
 
