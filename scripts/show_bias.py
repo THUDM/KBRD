@@ -28,7 +28,8 @@ if __name__ == '__main__':
     # movie_entities = ['<http://dbpedia.org/resource/Star_Wars_(film)>']
     # movie_entities = ['<http://dbpedia.org/resource/Beauty_and_the_Beast_(2017_film)>']
     # movie_entities = ['<http://dbpedia.org/resource/Forrest_Gump>']
-    movie_entities = ['<http://dbpedia.org/resource/The_Shining_(film)>']
+    # movie_entities = ['<http://dbpedia.org/resource/The_Shining_(film)>']
+    movie_entities = ['<http://dbpedia.org/resource/The_Avengers_(2012_film)>']
 
     # movie_entities = ['<http://dbpedia.org/resource/Iron_Man_(2008_film)>']
     # movie_entities = ['<http://dbpedia.org/resource/The_Godfather_(film_series)>']
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     agent = create_agent(opt, requireModelExists=True)
     entity2entityId = pkl.load(open('data/redial/entity2entityId.pkl', 'rb'))
 
-    up = agent.model.ripplenet.user_representation([
+    up, _ = agent.model.ripplenet.user_representation([
         list(map(lambda x: entity2entityId[x], movie_entities))
     ])
 

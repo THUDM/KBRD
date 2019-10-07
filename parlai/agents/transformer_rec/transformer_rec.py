@@ -193,7 +193,7 @@ class TransformerRecGeneratorAgent(TorchGeneratorAgent):
         add_common_cmdline_args(agent)
         agent.add_argument("-ne", "--n-entity", type=int)
         agent.add_argument("-nr", "--n-relation", type=int)
-        agent.add_argument("-dim", "--dim", type=int, default=16)
+        agent.add_argument("-dim", "--dim", type=int, default=128)
         agent.add_argument("-hop", "--n-hop", type=int, default=2)
         agent.add_argument("-kgew", "--kge-weight", type=float, default=1)
         agent.add_argument("-l2w", "--l2-weight", type=float, default=2.5e-6)
