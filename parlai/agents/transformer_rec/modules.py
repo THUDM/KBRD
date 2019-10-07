@@ -14,8 +14,8 @@ import numpy as np
 
 from parlai.core.torch_generator_agent import TorchGeneratorModel
 from parlai.core.utils import neginf
-from parlai.agents.ripplenet.modules import RippleNet
-from parlai.agents.ripplenet.ripplenet import _load_kg_embeddings
+from parlai.agents.kbrd.modules import KBRD
+from parlai.agents.kbrd.kbrd import _load_kg_embeddings
 
 
 def _normalize(tensor, norm_layer):
@@ -565,7 +565,7 @@ class TransformerGeneratorModel(TorchGeneratorModel):
             open(os.path.join(opt["datapath"], "redial", "entity2entityId.pkl"), "rb")
         )
         # entity_kg_emb = _load_kg_embeddings(entity2entityId, opt["dim"], "sub_joined_embeddings.tsv")
-        self.ripplenet = RippleNet(opt['n_entity'],opt['n_relation'],opt['dim'],opt['n_hop'],opt['kge_weight'],opt['l2_weight'],opt['n_memory'],opt['item_update_mode'],opt['using_all_hops'], kg, None, None, num_bases=8)
+        self.ripplenet = KBRD(opt['n_entity'],opt['n_relation'],opt['dim'],opt['n_hop'],opt['kge_weight'],opt['l2_weight'],opt['n_memory'],opt['item_update_mode'],opt['using_all_hops'], kg, None, None, num_bases=8)
         state_dict = torch.load('saved/both_rgcn_1')['model']
         # state_dict = OrderedDict([('ripplenet.' + key, state_dict[key]) for key in state_dict])
         self.ripplenet.load_state_dict(state_dict)
@@ -575,10 +575,10 @@ class TransformerGeneratorModel(TorchGeneratorModel):
         # self.user_representation_to_bias_1 = nn.Linear(opt['dim'], 256)
         # self.user_representation_to_bias_2 = nn.Linear(256, 2048)
         # self.user_representation_to_bias_3 = nn.Linear(2048, len(dictionary))
-        for param in self.ripplenet.parameters():
+        for param in self.kbrd.parameters():
             param.requires_grad = False
 
-        # self.ripplenet.user_representation(item_list)
+        # self.kbrd.user_representation(item_list)
 
     def reorder_encoder_states(self, encoder_states, indices):
         enc, mask = encoder_states

@@ -555,7 +555,7 @@ class TorchGeneratorAgent(TorchAgent):
         self.zero_grad()
 
         if getattr(batch, 'movies', None):
-            assert hasattr(self.model, 'ripplenet')
+            assert hasattr(self.model, 'kbrd')
             self.model.user_representation, _ = self.model.ripplenet.user_representation(batch.movies)
             self.model.user_representation = self.model.user_representation.detach()
         try:
@@ -594,7 +594,7 @@ class TorchGeneratorAgent(TorchAgent):
         self.model.eval()
         cand_scores = None
         if getattr(batch, 'movies', None):
-            assert hasattr(self.model, 'ripplenet')
+            assert hasattr(self.model, 'kbrd')
             self.model.user_representation, _ = self.model.ripplenet.user_representation(batch.movies)
             self.model.user_representation = self.model.user_representation.detach()
 
