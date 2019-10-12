@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 ### Dataset
 
-- We use the **TaoDescribe** dataset, which will be automatically downloaded by the script.
+- We use the **ReDial** dataset, which will be automatically downloaded by the script.
 - Download the refined knowledge base (dbpedia) used in this paper [here](https://cloud.tsinghua.edu.cn/f/6af126bdccc44352bfee/?dl=1). Decompress it and get the `dbpedia/` folder, which should contain two files `mappingbased_objects_en.ttl` and `short_abstracts_en.ttl`.
 
 ### Training
