@@ -556,7 +556,7 @@ class TorchGeneratorAgent(TorchAgent):
 
         if getattr(batch, 'movies', None):
             assert hasattr(self.model, 'kbrd')
-            self.model.user_representation, _ = self.model.ripplenet.user_representation(batch.movies)
+            self.model.user_representation, _ = self.model.kbrd.user_representation(batch.movies)
             self.model.user_representation = self.model.user_representation.detach()
         try:
             loss = self.compute_loss(batch)
@@ -595,7 +595,7 @@ class TorchGeneratorAgent(TorchAgent):
         cand_scores = None
         if getattr(batch, 'movies', None):
             assert hasattr(self.model, 'kbrd')
-            self.model.user_representation, _ = self.model.ripplenet.user_representation(batch.movies)
+            self.model.user_representation, _ = self.model.kbrd.user_representation(batch.movies)
             self.model.user_representation = self.model.user_representation.detach()
 
         if batch.label_vec is not None:

@@ -36,8 +36,17 @@ pip install -r requirements.txt
 
 ### Training
 
+To train the recommender part, run:
+
 ```bash
 bash scripts/both.sh <num_exps> <gpu_id>
+bash scripts/baseline.sh <num_exps> <gpu_id>
+```
+
+To train the dialog part, run:
+
+```bash
+bash scripts/t2t_rec_rgcn.sh <num_exps> <gpu_id>
 ```
 
 ### Logging

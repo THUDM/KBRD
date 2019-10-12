@@ -54,22 +54,11 @@ class RedialTeacher(DialogTeacher):
             opt
         )
 
-        # with open(movies_with_mentions_path, "r") as f:
-        #     reader = csv.reader(f)
-        #     self.id2name, self.id2idx = {}, {}
-        #     for idx, row in enumerate(reader):
-        #         if row[0] == "movieId":
-        #             continue
-        #         self.id2name["@" + row[0]] = row[1]
-        #         self.id2idx["@" + row[0]] = idx - 1
-
         if not shared:
             self.entity2entityId = pkl.load(open(entity2entityId_path, "rb"))
             self.relation2relationId = pkl.load(open(relation2relationId_path, "rb"))
             self.id2entity = pkl.load(open(id2entity_path, "rb"))
-            # entity_dict = pkl.load(open(entity_dict_path, "rb"))
             self.text_dict = pkl.load(open(text_dict_path, "rb"))
-            # self.entity2entityid = dict([(k, i) for i, k in enumerate(entity_dict)])
         else:
             self.entity2entityId = shared["entity2entityId"]
             self.relation2relationId = shared["relation2relationId"]
@@ -111,10 +100,6 @@ class RedialTeacher(DialogTeacher):
         entities = _text2entities(text, self.text_dict)
         entities = [str(self.entity2entityId[x]) for x in entities if x in self.entity2entityId]
         return entities
-        # for entity in entities:
-        #     if entity in self.entity2entityId:
-        #         text += f" #{self.entity2entityId[entity]}"
-        # return text
 
     def setup_data(self, path):
         self.instances = []

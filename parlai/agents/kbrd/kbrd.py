@@ -65,19 +65,17 @@ def _load_text_embeddings(entity2entityId, dim, abstract_path):
         model = Doc2Vec(corpus, vector_size=vec_dim, min_count=5, workers=28)
         model.save('doc2vec')
 
-    # vectorizer = TfidfVectorizer(stop_words='english', tokenizer=nltk_tokenize, min_df=3)
-    # text_embeddings = vectorizer.fit_transform(texts)
     full_text_embeddings = torch.zeros(len(entity2entityId), vec_dim)
     for i, entity in enumerate(entities):
         full_text_embeddings[entity2entityId[entity]] = torch.from_numpy(model.docvecs[i])
 
     return full_text_embeddings
 
-class KBRDAgent(TorchAgent):
+class KbrdAgent(TorchAgent):
     @classmethod
     def add_cmdline_args(cls, argparser):
         """Add command-line arguments specifically for this agent."""
-        super(KBRDAgent, cls).add_cmdline_args(argparser)
+        super(KbrdAgent, cls).add_cmdline_args(argparser)
         agent = argparser.add_argument_group("Arguments")
         agent.add_argument("-ne", "--n-entity", type=int)
         agent.add_argument("-nr", "--n-relation", type=int)
@@ -94,14 +92,14 @@ class KBRDAgent(TorchAgent):
             "-lr", "--learningrate", type=float, default=3e-3, help="learning rate"
         )
         agent.add_argument("-nb", "--num-bases", type=int, default=8)
-        KBRDAgent.dictionary_class().add_cmdline_args(argparser)
+        KbrdAgent.dictionary_class().add_cmdline_args(argparser)
         return agent
 
     def __init__(self, opt, shared=None):
         super().__init__(opt, shared)
         init_model, is_finetune = self._get_init_model(opt, shared)
 
-        self.id = "KBRDAgent"
+        self.id = "KbrdAgent"
         self.n_entity = opt["n_entity"]
         self.n_hop = opt["n_hop"]
         self.n_memory = opt["n_memory"]
@@ -119,10 +117,8 @@ class KBRDAgent(TorchAgent):
                 open(os.path.join(opt["datapath"], "redial", "entity2entityId.pkl"), "rb")
             )
             entity_kg_emb = None
-            # entity_kg_emb = _load_kg_embeddings(entity2entityId, opt["dim"], "sub_joined_embeddings.tsv")
             abstract_path = 'dbpedia/short_abstracts_en.ttl'
             entity_text_emb = None
-            # entity_text_emb = _load_text_embeddings(entity2entityId, opt["dim"], abstract_path)
 
             # encoder captures the input text
             self.model = KBRD(
@@ -161,7 +157,6 @@ class KBRDAgent(TorchAgent):
             self.movie_ids = shared["movie_ids"]
             self.optimizer = shared["optimizer"]
 
-        # self.criterion = nn.NLLLoss()
         self.metrics = defaultdict(float)
         self.counts = defaultdict(int)
 
@@ -178,8 +173,6 @@ class KBRDAgent(TorchAgent):
         m["num_batches"] = self.counts["num_batches"]
         m["loss"] = self.metrics["loss"] / m["num_batches"]
         m["base_loss"] = self.metrics["base_loss"] / m["num_batches"]
-        m["kge_loss"] = self.metrics["kge_loss"] / m["num_batches"]
-        m["l2_loss"] = self.metrics["l2_loss"] / m["num_batches"]
         m["acc"] = self.metrics["acc"] / m["num_tokens"]
         m["auc"] = self.metrics["auc"] / m["num_tokens"]
         # Top-k recommendation Recall
@@ -187,9 +180,6 @@ class KBRDAgent(TorchAgent):
             if x.startswith("recall") and self.counts[x] > 200:
                 m[x] = self.metrics[x] / self.counts[x]
                 m["num_tokens_" + x] = self.counts[x]
-        # for x in ["1", "10", "50"]:
-        #     if f"recall@{x}" in self.metrics and self.metrics[f"recall@{x}"] != []:
-        #         m[f"recall@{x}"] = self.metrics[f"recall@{x}"] / m["num_tokens"]
         for k, v in m.items():
             # clean up: rounds to sigfigs and converts tensors to floats
             base[k] = round_sigfigs(v, 4)
@@ -213,20 +203,6 @@ class KBRDAgent(TorchAgent):
     def vectorize(self, obs, history, **kwargs):
         if "text" not in obs:
             return obs
-        # # match movies
-        # movie_pattern = re.compile(r"@\d+")
-        # movie_input_match = re.findall(movie_pattern, history.get_history_str())
-        # movie_input_match = [int(x[1:]) for x in movie_input_match]
-        # movie_input_match = [x for x in movie_input_match if x in self.kg]
-        # # match movies and entities
-        # # pattern = re.compile(r"@\d+|#\d+")
-        # pattern = re.compile(r"@\d+")
-        # # pattern = re.compile(r"#\d+")
-        # input_match = re.findall(pattern, history.get_history_str())
-        # input_match = [int(x[1:]) for x in input_match]
-        # input_match = [x for x in input_match if x in self.kg]
-        # # print(input_match)
-        # # print(list(self.kg.keys())[:10])
 
         if "labels" in obs:
             label_type = "labels"
@@ -236,14 +212,6 @@ class KBRDAgent(TorchAgent):
             label_type = None
         if label_type is None:
             return obs
-        # pattern = re.compile(r"@\d+")
-        # labels_match = re.findall(pattern, obs[label_type][0])
-        # labels_match = [int(x[1:]) for x in labels_match]
-        # # if movie_input_match == [] or input_match == [] or labels_match == []:
-        # if labels_match == []:
-        #     del obs["text"], obs[label_type]
-        #     return obs
-
 
         # mentioned movies
         input_match = list(map(int, obs['label_candidates'][1].split()))
@@ -264,7 +232,6 @@ class KBRDAgent(TorchAgent):
         obs[label_type + "_vec"] = labels_vec
 
         # turn no.
-        # obs["turn"] = int(obs['label_candidates'][0])
         obs["turn"] = len(input_match)
 
         return obs
@@ -293,8 +260,6 @@ class KBRDAgent(TorchAgent):
         self.optimizer.step()
 
         self.metrics["base_loss"] += return_dict["base_loss"].item()
-        self.metrics["kge_loss"] += return_dict["kge_loss"].item()
-        self.metrics["l2_loss"] += return_dict["l2_loss"].item()
         self.metrics["loss"] += loss.item()
 
         self.counts["num_tokens"] += bs
@@ -327,16 +292,10 @@ class KBRDAgent(TorchAgent):
         loss = return_dict["loss"]
 
         self.metrics["base_loss"] += return_dict["base_loss"].item()
-        self.metrics["kge_loss"] += return_dict["kge_loss"].item()
-        self.metrics["l2_loss"] += return_dict["l2_loss"].item()
         self.metrics["loss"] += loss.item()
         self.counts["num_tokens"] += bs
         self.counts["num_batches"] += 1
 
-        # with torch.no_grad():
-        #     outputs = self._eval_topk_recommendation(
-        #         bs, memories_h, memories_r, memories_t
-        #     )
         outputs = return_dict["scores"].cpu()
         outputs = outputs[:, torch.LongTensor(self.movie_ids)]
         _, pred_idx = torch.topk(outputs, k=100, dim=1)
