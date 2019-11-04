@@ -574,12 +574,6 @@ class TrainLoop():
         v_report = run_eval(valid_world, opt, 'valid', max_exs, write_log=True)
         test_world = _maybe_load_eval_world(self.agent, opt, 'test')
         t_report = run_eval(test_world, opt, 'test', max_exs, write_log=True)
-        from orion.client import report_results
-        report_results([dict(
-            name='-recall@50',
-            type='objective',
-            value=-t_report['recall@50']
-        )])
 
         if valid_world:
             valid_world.shutdown()
