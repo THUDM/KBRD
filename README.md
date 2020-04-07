@@ -58,8 +58,6 @@ TensorBoard logs and models will be saved in `saved/` folder.
 
 - `show_bias.py` is used to show the vocabulary bias of a specific movie (like in Table 4)
 
-TODO
-
 If you have difficulties to get things working in the above steps, please let us know.
 
 ## Cite
