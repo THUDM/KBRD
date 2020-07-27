@@ -564,7 +564,7 @@ class TransformerGeneratorModel(TorchGeneratorModel):
         entity2entityId = pkl.load(
             open(os.path.join(opt["datapath"], "redial", "entity2entityId.pkl"), "rb")
         )
-        self.kbrd = KBRD(opt['n_entity'],opt['n_relation'],opt['dim'],opt['n_hop'],opt['kge_weight'],opt['l2_weight'],opt['n_memory'],opt['item_update_mode'],opt['using_all_hops'], kg, None, None, num_bases=8)
+        self.kbrd = KBRD(opt['n_entity'],opt['n_relation'],opt['dim'], kg, None, None, num_bases=8)
         state_dict = torch.load('saved/both_rgcn_0')['model']
         self.kbrd.load_state_dict(state_dict)
         self.user_representation_to_bias_1 = nn.Linear(opt['dim'], 512)

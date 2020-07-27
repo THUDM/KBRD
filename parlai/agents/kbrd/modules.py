@@ -37,23 +37,28 @@ class SelfAttentionLayer(nn.Module):
         attention = F.softmax(e)
         return torch.matmul(attention, h)
 
-def _edge_list(kg, n_entity, hop):
+def _edge_list(kg, n_entity):
     edge_list = []
-    for h in range(hop):
-        for entity in range(n_entity):
-            # add self loop
-            edge_list.append((entity, entity, 185))
-            if entity not in kg:
-                continue
-            for tail_and_relation in kg[entity]:
-                if entity != tail_and_relation[1] and tail_and_relation[0] != 185:
-                    edge_list.append((entity, tail_and_relation[1], tail_and_relation[0]))
-                    edge_list.append((tail_and_relation[1], entity, tail_and_relation[0]))
+    self_loop_id = None
+    for entity in range(n_entity):
+        if entity not in kg:
+            continue
+        for tail_and_relation in kg[entity]:
+            if entity != tail_and_relation[1]:
+                edge_list.append((entity, tail_and_relation[1], tail_and_relation[0]))
+                edge_list.append((tail_and_relation[1], entity, tail_and_relation[0]))
+            else:
+                self_loop_id = tail_and_relation[0]
+    assert self_loop_id
+    for entity in range(n_entity):
+        # add self loop
+        edge_list.append((entity, entity, self_loop_id))
 
     relation_cnt = defaultdict(int)
     relation_idx = {}
     for h, t, r in edge_list:
         relation_cnt[r] += 1
+    # Discard infrequent relations
     for h, t, r in edge_list:
         if relation_cnt[r] > 1000 and r not in relation_idx:
             relation_idx[r] = len(relation_idx)
@@ -66,12 +71,6 @@ class KBRD(nn.Module):
         n_entity,
         n_relation,
         dim,
-        n_hop,
-        kge_weight,
-        l2_weight,
-        n_memory,
-        item_update_mode,
-        using_all_hops,
         kg,
         entity_kg_emb,
         entity_text_emb,
@@ -82,12 +81,6 @@ class KBRD(nn.Module):
         self.n_entity = n_entity
         self.n_relation = n_relation
         self.dim = dim
-        self.n_hop = n_hop
-        self.kge_weight = kge_weight
-        self.l2_weight = l2_weight
-        self.n_memory = n_memory
-        self.item_update_mode = item_update_mode
-        self.using_all_hops = using_all_hops
 
         self.entity_emb = nn.Embedding(self.n_entity, self.dim)
         self.relation_emb = nn.Embedding(self.n_relation, self.dim)
@@ -101,7 +94,7 @@ class KBRD(nn.Module):
 
         self.kg = kg
 
-        edge_list, self.n_relation = _edge_list(self.kg, self.n_entity, hop=2)
+        edge_list, self.n_relation = _edge_list(self.kg, self.n_entity)
         self.rgcn = RGCNConv(self.n_entity, self.dim, self.n_relation, num_bases=num_bases)
         edge_list = list(set(edge_list))
         edge_list_tensor = torch.LongTensor(edge_list).cuda()

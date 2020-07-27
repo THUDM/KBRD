@@ -80,14 +80,6 @@ class KbrdAgent(TorchAgent):
         agent.add_argument("-ne", "--n-entity", type=int)
         agent.add_argument("-nr", "--n-relation", type=int)
         agent.add_argument("-dim", "--dim", type=int, default=128)
-        agent.add_argument("-hop", "--n-hop", type=int, default=2)
-        agent.add_argument("-kgew", "--kge-weight", type=float, default=1)
-        agent.add_argument("-l2w", "--l2-weight", type=float, default=2.5e-6)
-        agent.add_argument("-nmem", "--n-memory", type=int, default=32)
-        agent.add_argument(
-            "-ium", "--item-update-mode", type=str, default="plus_transform"
-        )
-        agent.add_argument("-uah", "--using-all-hops", type=bool, default=True)
         agent.add_argument(
             "-lr", "--learningrate", type=float, default=3e-3, help="learning rate"
         )
@@ -101,8 +93,6 @@ class KbrdAgent(TorchAgent):
 
         self.id = "KbrdAgent"
         self.n_entity = opt["n_entity"]
-        self.n_hop = opt["n_hop"]
-        self.n_memory = opt["n_memory"]
 
         if not shared:
             # set up model from scratch
@@ -125,12 +115,6 @@ class KbrdAgent(TorchAgent):
                 n_entity=opt["n_entity"],
                 n_relation=opt["n_relation"],
                 dim=opt["dim"],
-                n_hop=opt["n_hop"],
-                kge_weight=opt["kge_weight"],
-                l2_weight=opt["l2_weight"],
-                n_memory=opt["n_memory"],
-                item_update_mode=opt["item_update_mode"],
-                using_all_hops=opt["using_all_hops"],
                 kg=self.kg,
                 entity_kg_emb=entity_kg_emb,
                 entity_text_emb=entity_text_emb,
