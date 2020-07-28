@@ -87,7 +87,34 @@ Sample output:
 Ttest_indResult(statistic=-11.325204070341204, pvalue=0.007706635327863829)
 ```
 
-2. `scripts/show_bias.py` is used to show the vocabulary bias of a specific movie (like the qualitative analysis in Table 4)
+2. `scripts/display_model.py` is used to generate responses.
+
+```bash
+python scripts/display_model.py -t redial -mf saved/transformer_rec_both_rgcn_0 -dt test
+```
+
+Example output (\[TorchAgent\] is our model output):
+
+```
+~~
+[eval_labels_choice]: Oh, you like scary movies?
+I recently watched __unk__
+[movies]:
+  37993
+[redial]: 
+Hello!
+Hello!
+What kind of movies do you like?
+I am looking for a movie recommendation.   When I was younger I really enjoyed the __unk__
+[label_candidates: 3|37993|50395||Oh, you like scary movies?
+I recently watched __unk__]
+[eval_labels: Oh, you like scary movies?
+I recently watched __unk__]
+   [TorchAgent]: have you seen "A Nightmare on Elm Street (1984)" ?
+~~
+```
+
+3. `scripts/show_bias.py` is used to show the vocabulary bias of a specific movie (like the qualitative analysis in Table 4)
 
 ```bash
 python scripts/show_bias.py -mf saved/transformer_rec_both_rgcn_0

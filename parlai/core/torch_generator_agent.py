@@ -19,6 +19,7 @@ Contains the following utilities:
 import os
 import math
 import tempfile
+import pickle as pkl
 from collections import defaultdict, Counter, namedtuple
 from operator import attrgetter
 
@@ -381,6 +382,26 @@ class TorchGeneratorAgent(TorchAgent):
                 broadcast_buffers=False,
             )
 
+        self.movie_ids = pkl.load(
+            open(os.path.join("data", "redial", "movie_ids.pkl"), "rb")
+        )
+        entity2entityId = pkl.load(
+            open(os.path.join("data", "redial", "entity2entityId.pkl"), "rb")
+        )
+        self.entityId2entity = {entity2entityId[x]: x for x in entity2entityId}
+        id2entity = pkl.load(
+            open(os.path.join("data", "redial", "id2entity.pkl"), "rb")
+        )
+        self.entity2id = {id2entity[x]: x for x in id2entity}
+        with open(os.path.join("data", "redial", "movies_with_mentions.csv"), "r") as f:
+            self.entity2movie = {}
+            f.readline()
+            for line in f:
+                pos = line.index(",")
+                key = int(line[:pos])
+                val = line[pos+1:-line[::-1].index(",")-1]
+                self.entity2movie[key] = val
+
         self.reset()
 
     def _v2t(self, vec):
@@ -591,12 +612,13 @@ class TorchGeneratorAgent(TorchAgent):
         if batch.text_vec is None:
             return
         bsz = batch.text_vec.size(0)
+        assert bsz == 1
         self.model.eval()
         cand_scores = None
         if getattr(batch, 'movies', None):
             assert hasattr(self.model, 'kbrd')
-            self.model.user_representation, _ = self.model.kbrd.user_representation(batch.movies)
-            self.model.user_representation = self.model.user_representation.detach()
+            self.model.user_representation, self.model.nodes_features = self.model.kbrd.user_representation(batch.movies)
+            self.model.user_representation, self.model.nodes_features = self.model.user_representation.detach(), self.model.nodes_features.detach()
 
         if batch.label_vec is not None:
             # calculate loss on targets with teacher forcing
@@ -656,6 +678,20 @@ class TorchGeneratorAgent(TorchAgent):
                 cand_choices.append([batch.candidates[i][o] for o in ordering])
 
         text = [self._v2t(p) for p in preds] if preds is not None else None
+        # Replace __unk__ with recommendations
+        if text is not None:
+            for j, t in enumerate(text):
+                scores = F.linear(self.model.user_representation, self.model.nodes_features, self.model.kbrd.output.bias)
+                outputs = scores.cpu()
+                outputs = outputs[0, torch.LongTensor(self.movie_ids)]
+                rec_movies = list(map(lambda x: str(self.movie_ids[x]), outputs.argsort(descending=True).tolist()))
+                movie_idx = 0
+                while "__unk__" in t:
+                    pos = t.index("__unk__")
+                    t = t[:pos] + "\"" + self.entity2movie[self.entity2id[self.entityId2entity[int(rec_movies[movie_idx])]]] + "\"" + t[pos + 7:]
+                    movie_idx += 1
+                text[j] = t
+
         return Output(text, cand_choices)
 
     def beam_search(self, model, batch, beam_size, start=1, end=2,

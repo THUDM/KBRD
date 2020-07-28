@@ -297,4 +297,4 @@ class KbrdAgent(TorchAgent):
             self.counts[f"recall@1"] += 1
             self.counts[f"recall@10"] += 1
             self.counts[f"recall@50"] += 1
-
+        return Output(list(map(lambda x: str(self.movie_ids[x]), outputs.argmax(dim=1).tolist())))
