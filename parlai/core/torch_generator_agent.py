@@ -394,13 +394,13 @@ class TorchGeneratorAgent(TorchAgent):
         )
         self.entity2id = {id2entity[x]: x for x in id2entity}
         with open(os.path.join("data", "redial", "movies_with_mentions.csv"), "r") as f:
-            self.entity2movie = {}
+            self.mid2movie = {}
             f.readline()
             for line in f:
                 pos = line.index(",")
                 key = int(line[:pos])
                 val = line[pos+1:-line[::-1].index(",")-1]
-                self.entity2movie[key] = val
+                self.mid2movie[key] = val
 
         self.reset()
 
@@ -688,7 +688,12 @@ class TorchGeneratorAgent(TorchAgent):
                 movie_idx = 0
                 while "__unk__" in t:
                     pos = t.index("__unk__")
-                    t = t[:pos] + "\"" + self.entity2movie[self.entity2id[self.entityId2entity[int(rec_movies[movie_idx])]]] + "\"" + t[pos + 7:]
+                    entity = self.entityId2entity[int(rec_movies[movie_idx])]
+                    if entity in self.entity2id:
+                        mid = self.entity2id[entity]
+                    else:
+                        mid = entity
+                    t = t[:pos] + "\"" + self.mid2movie[mid] + "\"" + t[pos + 7:]
                     movie_idx += 1
                 text[j] = t
 
