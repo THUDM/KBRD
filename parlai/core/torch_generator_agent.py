@@ -688,6 +688,8 @@ class TorchGeneratorAgent(TorchAgent):
                 movie_idx = 0
                 while "__unk__" in t:
                     pos = t.index("__unk__")
+                    while int(rec_movies[movie_idx]) in batch.movies[0]:
+                        movie_idx += 1
                     entity = self.entityId2entity[int(rec_movies[movie_idx])]
                     if entity in self.entity2id:
                         mid = self.entity2id[entity]
