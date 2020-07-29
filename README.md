@@ -110,7 +110,7 @@ I am looking for a movie recommendation.   When I was younger I really enjoyed t
 I recently watched __unk__]
 [eval_labels: Oh, you like scary movies?
 I recently watched __unk__]
-   [TorchAgent]: have you seen "A Nightmare on Elm Street (1984)" ?
+   [TorchAgent]: have you seen "The Shining  (1980)" ?
 ~~
 ```
 
