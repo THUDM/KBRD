@@ -612,7 +612,6 @@ class TorchGeneratorAgent(TorchAgent):
         if batch.text_vec is None:
             return
         bsz = batch.text_vec.size(0)
-        assert bsz == 1
         self.model.eval()
         cand_scores = None
         if getattr(batch, 'movies', None):
@@ -678,8 +677,8 @@ class TorchGeneratorAgent(TorchAgent):
                 cand_choices.append([batch.candidates[i][o] for o in ordering])
 
         text = [self._v2t(p) for p in preds] if preds is not None else None
-        # Replace __unk__ with recommendations
-        if text is not None:
+        # Replace __unk__ with recommendations when generating responses
+        if text is not None and bsz == 1:
             for j, t in enumerate(text):
                 scores = F.linear(self.model.user_representation, self.model.nodes_features, self.model.kbrd.output.bias)
                 outputs = scores.cpu()
