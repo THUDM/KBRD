@@ -150,6 +150,8 @@ class RedialTeacher(DialogTeacher):
                         target_text, instance["initiatorQuestions"]
                     )
                     turn += 1
+                    if message_idx == len(messages) and target_text == "":
+                        break
                     yield (source_text, [target_text], None, [str(turn), ' '.join(previously_mentioned_movies_list + source_movie_list), ' '.join(target_movie_list), ' '.join(mentioned_entities), target_text], None), new_episode
                     new_episode = False
                     previously_mentioned_movies_list += source_movie_list + target_movie_list
