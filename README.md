@@ -6,7 +6,8 @@ Towards **K**nowledge-**B**ased **R**ecommender **D**ialog System.<br>
 [Qibin Chen](https://www.qibin.ink), [Junyang Lin](https://justinlin610.github.io), Yichang Zhang, Ming Ding, [Yukuo Cen](https://sites.google.com/view/yukuocen), [Hongxia Yang](https://sites.google.com/site/hystatistics/home), [Jie Tang](http://keg.cs.tsinghua.edu.cn/jietang/).<br>
 In EMNLP-IJCNLP 2019
 
-* **New: code and README are improved.**
+* **New: The current SOTA on the ReDial dataset is https://arxiv.org/pdf/2007.04032.pdf. Don't miss out that great work!**
+* New: code and README are improved.
 * We curated a paper list for NLP + Recommender System at https://github.com/THUDM/NLP4Rec-Papers. Contributions are welcome.
 
 ## Prerequisites
