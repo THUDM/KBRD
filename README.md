@@ -1,14 +1,12 @@
-# KBRD
+## [KBRD: Towards **K**nowledge-**B**ased **R**ecommender **D**ialog System](https://arxiv.org/abs/1908.05391)
 
-### [arXiv](https://arxiv.org/abs/1908.05391)
+[![GitHub stars](https://img.shields.io/github/stars/THUDM/KBRD)](https://github.com/THUDM/KBRD/stargazers)
+[![GitHub license](https://img.shields.io/github/license/THUDM/KBRD)](https://github.com/THUDM/KBRD/blob/master/LICENSE)
 
-Towards **K**nowledge-**B**ased **R**ecommender **D**ialog System.<br>
-[Qibin Chen](https://www.qibin.ink), [Junyang Lin](https://justinlin610.github.io), Yichang Zhang, Ming Ding, [Yukuo Cen](https://sites.google.com/view/yukuocen), [Hongxia Yang](https://sites.google.com/site/hystatistics/home), [Jie Tang](http://keg.cs.tsinghua.edu.cn/jietang/).<br>
-In EMNLP-IJCNLP 2019
+Paper accepted at EMNLP-IJCNLP 2019. Latest version at [arXiv](https://arxiv.org/abs/1908.05391).
 
-* **New: The current SOTA on the ReDial dataset is https://arxiv.org/pdf/2007.04032.pdf. Don't miss out that great work!**
-* New: code and README are improved.
-* We curated a paper list for NLP + Recommender System at https://github.com/THUDM/NLP4Rec-Papers. Contributions are welcome.
+* **New:** code and README are improved.
+* We curated a paper list for NLP + Recommender System at [THUDM/NLP4Rec-Papers](https://github.com/THUDM/NLP4Rec-Papers). Contributions are welcome.
 
 ## Prerequisites
 
