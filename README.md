@@ -34,8 +34,8 @@ pip install -r requirements.txt
 ### Dataset
 
 - We use the **ReDial** dataset, which will be automatically downloaded by the script.
-- Download the refined knowledge base (dbpedia) used in this paper [[Google Drive]](https://drive.google.com/open?id=1WqRoQAxH_kdoJpbYVsFF0EN4ZJxiiDB2) [[Tsinghua Cloud]](https://cloud.tsinghua.edu.cn/f/6af126bdccc44352bfee/?dl=1). Decompress it and get the `<path/to/KBRD/dbpedia/>` folder, which should contain two files `mappingbased_objects_en.ttl` and `short_abstracts_en.ttl`.
-- Download the proprocessed extracted entities set [[Google Drive]](https://drive.google.com/open?id=1OG-kNIeUi3i0UDNhJVMEnia9JeRAHVXB) [[Tsinghua Cloud]](https://cloud.tsinghua.edu.cn/f/88ac4b7eab6c416ca74f/?dl=1) and put it under `<path/to/KBRD/data/redial/`.
+- Download the refined knowledge base (dbpedia) used in this paper [[Google Drive]](https://drive.google.com/open?id=1WqRoQAxH_kdoJpbYVsFF0EN4ZJxiiDB2). Decompress it and get the `<path/to/KBRD/dbpedia/>` folder, which should contain two files `mappingbased_objects_en.ttl` and `short_abstracts_en.ttl`.
+- Download the proprocessed extracted entities set [[Google Drive]](https://drive.google.com/open?id=1OG-kNIeUi3i0UDNhJVMEnia9JeRAHVXB) and put it under `<path/to/KBRD/data/redial/`.
 
 ### Training
 
